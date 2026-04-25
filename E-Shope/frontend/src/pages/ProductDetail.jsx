@@ -122,7 +122,7 @@ const ProductDetail = () => {
                             </div>
                         )}
                         {/* Action buttons pinned at bottom */}
-                        <div style={{ display: 'flex', gap: '0', padding: '16px 20px', borderTop: '1px solid #f0f0f0', gap: '12px' }}>
+                        <div style={{ display: 'flex', gap: '12px', padding: '16px 20px', borderTop: '1px solid #f0f0f0' }}>
                             <button onClick={handleAddToCart} disabled={adding || stock === 0}
                                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', fontSize: '14px', fontWeight: 700, borderRadius: '2px', border: 'none', cursor: stock === 0 ? 'not-allowed' : 'pointer', background: added ? '#388e3c' : '#ff9f00', color: 'white', transition: 'background 0.2s' }}>
                                 <ShoppingCart size={18} />

@@ -1,13 +1,16 @@
 import { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, User, Mail, Lock, ArrowRight, ShoppingBag, Store, Phone, Shield } from 'lucide-react';
 import useResponsive from '../hooks/useResponsive';
 
 const Login = () => {
     const location = useLocation();
+    const [searchParams] = useSearchParams();
     const { isMobile } = useResponsive();
-    const [isRegister, setIsRegister] = useState(location.pathname === '/register');
+    const [isRegister, setIsRegister] = useState(
+        location.pathname === '/register' || searchParams.get('tab') === 'register'
+    );
     const [loginMethod, setLoginMethod] = useState('email'); // 'email' or 'mobile'
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -16,14 +19,13 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const [accountType, setAccountType] = useState('customer');
+    const [accountType, setAccountType] = useState(searchParams.get('seller') === '1' ? 'seller' : 'customer');
     const [focusedField, setFocusedField] = useState(null);
 
     // OTP state
     const [otpSent, setOtpSent] = useState(false);
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [otpTimer, setOtpTimer] = useState(0);
-    const [demoOtp, setDemoOtp] = useState('');
     const otpRefs = useRef([]);
     const timerRef = useRef(null);
 
@@ -52,7 +54,6 @@ const Login = () => {
         setLoading(false);
         if (result.success) {
             setOtpSent(true);
-            setDemoOtp(result.demo_otp || '');
             startTimer();
         } else {
             setError(result.message);
@@ -248,20 +249,18 @@ const Login = () => {
                         </button>
                     </div>
 
-                    {demoOtp && (
-                        <div style={{
-                            background: 'rgba(251,191,36,0.1)',
-                            border: '1px solid rgba(251,191,36,0.25)',
-                            borderRadius: '10px',
-                            padding: '10px 14px',
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                        }}>
-                            <Shield size={14} style={{ color: '#fbbf24' }} />
-                            <span style={{ fontSize: '12px', color: '#fcd34d' }}>
-                                Demo OTP: <strong style={{ letterSpacing: '2px', fontFamily: 'monospace' }}>{demoOtp}</strong>
-                            </span>
-                        </div>
-                    )}
+                    <div style={{
+                        background: 'rgba(251,191,36,0.1)',
+                        border: '1px solid rgba(251,191,36,0.25)',
+                        borderRadius: '10px',
+                        padding: '10px 14px',
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                    }}>
+                        <Shield size={14} style={{ color: '#fbbf24' }} />
+                        <span style={{ fontSize: '12px', color: '#fcd34d' }}>
+                            OTP sent to your mobile number. Check the server console for the demo OTP.
+                        </span>
+                    </div>
 
                     <div>
                         <p style={{ margin: '0 0 10px', fontSize: '13px', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>

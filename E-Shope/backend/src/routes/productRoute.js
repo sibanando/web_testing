@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
+const { verifyToken, requireAdmin } = require('../middleware/auth');
 
-// GET /api/products/categories/list  — unique categories (must be before /:id)
+// GET /api/products/categories/list — unique categories (must be before /:id)
 router.get('/categories/list', async (req, res) => {
     try {
         const { rows } = await db.query('SELECT DISTINCT category FROM products ORDER BY category');
@@ -12,10 +13,10 @@ router.get('/categories/list', async (req, res) => {
     }
 });
 
-// GET /api/products  — list all or filter by category/search
+// GET /api/products — list all or filter by category/search with pagination
 router.get('/', async (req, res) => {
     try {
-        const { category, search, limit } = req.query;
+        const { category, search, limit, offset } = req.query;
         let query = 'SELECT * FROM products WHERE 1=1';
         const params = [];
 
@@ -35,6 +36,10 @@ router.get('/', async (req, res) => {
             params.push(parseInt(limit));
             query += ` LIMIT $${params.length}`;
         }
+        if (offset) {
+            params.push(parseInt(offset));
+            query += ` OFFSET $${params.length}`;
+        }
 
         const { rows } = await db.query(query, params);
         res.json(rows);
@@ -44,7 +49,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET /api/products/:id  — single product
+// GET /api/products/:id — single product
 router.get('/:id', async (req, res) => {
     try {
         const { rows } = await db.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
@@ -55,8 +60,8 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// POST /api/products  — create product
-router.post('/', async (req, res) => {
+// POST /api/products — admin-only product creation
+router.post('/', verifyToken, requireAdmin, async (req, res) => {
     try {
         const { name, price, description, category, images, discount, stock } = req.body;
         if (!name || !price) return res.status(400).json({ message: 'Name and price required' });

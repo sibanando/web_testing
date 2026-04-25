@@ -113,13 +113,13 @@ const Footer = () => {
                 {/* Sell/Advertise row */}
                 <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', paddingTop: '24px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0', fontSize: '12px' }}>
-                        {[['🏪', 'Sell on ApniDunia'], ['📢', 'Advertise'], ['🎁', 'Gift Cards'], ['📰', 'Help Centre']].map(([icon, label], i, arr) => (
+                        {[['🏪', 'Sell on ApniDunia', '/login?tab=register&seller=1'], ['📢', 'Advertise', '/page/about-us'], ['🎁', 'Gift Cards', '/page/payments'], ['📰', 'Help Centre', '/page/faq']].map(([icon, label, to], i, arr) => (
                             <span key={label} style={{ display: 'flex', alignItems: 'center' }}>
-                                <a href="javascript:void(0)" style={{ color: '#64748b', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', padding: '0 14px' }}
+                                <Link to={to} style={{ color: '#64748b', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', padding: '0 14px' }}
                                     onMouseEnter={e => e.currentTarget.style.color = '#fbbf24'}
                                     onMouseLeave={e => e.currentTarget.style.color = '#64748b'}>
                                     <span>{icon}</span> {label}
-                                </a>
+                                </Link>
                                 {i < arr.length - 1 && <span style={{ color: '#1e293b' }}>|</span>}
                             </span>
                         ))}
@@ -139,13 +139,12 @@ const Footer = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                         <span style={{ color: '#475569', fontSize: '11px', fontWeight: 700, letterSpacing: '1px' }}>EXPERIENCE APNIDUNIA APP ON</span>
                         <div style={{ display: 'flex', gap: '10px' }}>
-                            {[['📱', 'Google Play', 'https://play.google.com/store'], ['🍎', 'App Store', 'https://www.apple.com/app-store/']].map(([icon, label, url]) => (
-                                <a key={label} href={url} target="_blank" rel="noopener noreferrer"
-                                    style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 14px', borderRadius: '6px', border: '1px solid #1e293b', color: '#94a3b8', textDecoration: 'none', fontSize: '12px', fontWeight: 600, background: 'transparent', transition: 'all 0.15s' }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = 'white'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8'; }}>
+                            {[['📱', 'Google Play'], ['🍎', 'App Store']].map(([icon, label]) => (
+                                <span key={label}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 14px', borderRadius: '6px', border: '1px solid #1e293b', color: '#475569', fontSize: '12px', fontWeight: 600 }}
+                                    title="App coming soon">
                                     {icon} {label}
-                                </a>
+                                </span>
                             ))}
                         </div>
                     </div>

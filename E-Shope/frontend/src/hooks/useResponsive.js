@@ -6,16 +6,23 @@ const useResponsive = () => {
     );
 
     useEffect(() => {
-        const handleResize = () => setWidth(window.innerWidth);
+        let timer;
+        const handleResize = () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => setWidth(window.innerWidth), 100);
+        };
         window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            clearTimeout(timer);
+        };
     }, []);
 
     return {
         width,
-        isMobile: width < 640,       // phones
-        isTablet: width >= 640 && width < 1024,  // tablets
-        isDesktop: width >= 1024,    // laptops / desktops
+        isMobile: width < 640,
+        isTablet: width >= 640 && width < 1024,
+        isDesktop: width >= 1024,
     };
 };
 

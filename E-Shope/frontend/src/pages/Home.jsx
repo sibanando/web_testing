@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
 import api from '../services/api';
@@ -8,7 +8,22 @@ import useResponsive from '../hooks/useResponsive';
 const Home = () => {
     const [products, setProducts] = useState([]);
     const [currentSlide, setCurrentSlide] = useState(0);
-    const [timeLeft, setTimeLeft] = useState({ h: 7, m: 23, s: 45 });
+    const dealExpiry = useRef(() => {
+        const stored = localStorage.getItem('deal_expiry');
+        if (stored && parseInt(stored) > Date.now()) return parseInt(stored);
+        const expiry = Date.now() + 24 * 60 * 60 * 1000; // 24h from now
+        localStorage.setItem('deal_expiry', String(expiry));
+        return expiry;
+    }).current();
+
+    const getTimeLeft = () => {
+        const diff = Math.max(0, dealExpiry - Date.now());
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        return { h, m, s };
+    };
+    const [timeLeft, setTimeLeft] = useState(getTimeLeft);
     const { isMobile, isTablet } = useResponsive();
     const [subEmail, setSubEmail] = useState('');
     const [subStatus, setSubStatus] = useState(null); // null | 'success' | 'error'
@@ -49,16 +64,7 @@ const Home = () => {
     }, []);
 
     useEffect(() => {
-        const countdown = setInterval(() => {
-            setTimeLeft(prev => {
-                let { h, m, s } = prev;
-                s--;
-                if (s < 0) { s = 59; m--; }
-                if (m < 0) { m = 59; h--; }
-                if (h < 0) { h = 23; m = 59; s = 59; }
-                return { h, m, s };
-            });
-        }, 1000);
+        const countdown = setInterval(() => setTimeLeft(getTimeLeft()), 1000);
         return () => clearInterval(countdown);
     }, []);
 
@@ -177,7 +183,7 @@ const Home = () => {
                                 </div>
                             </div>
                         </div>
-                        <a href="#" style={{ color: '#1a3f9c', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#f0f4ff', padding: '5px 12px', borderRadius: '20px', border: '1px solid #c7d3f0' }}>View All</a>
+                        <Link to="/" style={{ color: '#1a3f9c', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#f0f4ff', padding: '5px 12px', borderRadius: '20px', border: '1px solid #c7d3f0' }}>View All</Link>
                     </div>
                     <div style={{ padding: '16px' }}>
                         {products.length > 0 ? (
@@ -202,7 +208,7 @@ const Home = () => {
                 <div style={sectionCard}>
                     <div style={sectionHeader}>
                         <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.3px' }}>Best Offers</span>
-                        <a href="#" style={{ color: '#1a3f9c', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#f0f4ff', padding: '5px 12px', borderRadius: '20px', border: '1px solid #c7d3f0' }}>View All</a>
+                        <Link to="/" style={{ color: '#1a3f9c', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#f0f4ff', padding: '5px 12px', borderRadius: '20px', border: '1px solid #c7d3f0' }}>View All</Link>
                     </div>
                     <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '12px' }}>
                         {topOffers.map((offer) => (
@@ -226,7 +232,7 @@ const Home = () => {
                         <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.3px' }}>
                             {activeSearch ? `Results for "${activeSearch}"` : activeCategory ? `${activeCategory} Products` : 'Suggested for You'}
                         </span>
-                        {!activeSearch && <a href="#" style={{ color: '#1a3f9c', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#f0f4ff', padding: '5px 12px', borderRadius: '20px', border: '1px solid #c7d3f0' }}>View All</a>}
+                        {!activeSearch && <Link to="/" style={{ color: '#1a3f9c', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#f0f4ff', padding: '5px 12px', borderRadius: '20px', border: '1px solid #c7d3f0' }}>View All</Link>}
                     </div>
                     <div style={{ padding: '16px' }}>
                         {products.length > 0 ? (

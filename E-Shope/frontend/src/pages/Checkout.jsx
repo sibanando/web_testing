@@ -21,7 +21,7 @@ delete L.Icon.Default.prototype._getIconUrl;
 // Flies map to center when coords change (triggered by geocode)
 const FlyTo = ({ center }) => {
     const map = useMap();
-    useEffect(() => { map.flyTo(center, 16, { duration: 1.2 }); }, [center[0], center[1]]);
+    useEffect(() => { map.flyTo(center, 16, { duration: 1.2 }); }, [map, center[0], center[1]]);
     return null;
 };
 
@@ -112,9 +112,15 @@ const Checkout = () => {
         }, 600);
     };
 
-    const discount = Math.round(total * 0.15);
+    const originalTotal = items.reduce((sum, item) => {
+        const price = parseFloat(item.price || 0);
+        const disc = parseInt(item.discount || 0);
+        const orig = disc > 0 ? Math.round(price / (1 - disc / 100)) : price;
+        return sum + orig * item.quantity;
+    }, 0);
+    const discount = Math.max(0, Math.round(originalTotal - total));
     const deliveryCharge = total > 500 ? 0 : 40;
-    const finalTotal = total - discount + deliveryCharge;
+    const finalTotal = total + deliveryCharge;
 
     // Cleanup all timers on unmount
     useEffect(() => {
@@ -205,9 +211,33 @@ const Checkout = () => {
         setLoading(false);
     };
 
-    // Manual "I've already paid" — also just polls for success (no separate screen)
-    const handlePaymentDone = () => {
-        // Already polling — button is just reassurance, no action needed
+    // Manual "I've already paid" — speeds up poll by triggering an immediate check
+    const handlePaymentDone = async () => {
+        if (!paymentId) return;
+        try {
+            const statusRes = await api.get(`/payment/status/${paymentId}`);
+            const { status, transactionId: txnId } = statusRes.data;
+            if (status === 'success') {
+                clearInterval(pollTimer.current);
+                clearInterval(countdownTimer.current);
+                try {
+                    const orderRes = await api.post('/orders', {
+                        userId: user?.id,
+                        total: finalTotal,
+                        items: items.map(i => ({ id: i.id, quantity: i.quantity, price: i.price })),
+                        address, phone,
+                        paymentMethod: 'UPI',
+                        transactionId: txnId
+                    });
+                    setOrderId(orderRes.data.orderId);
+                    clearCart();
+                    setStep('success');
+                } catch {
+                    setFailMessage('Payment received but order creation failed. Please contact support.');
+                    setStep('failed');
+                }
+            }
+        } catch { /* network error — polling will continue */ }
     };
 
     const handleDirectPay = async (payMethod) => {
@@ -494,7 +524,6 @@ const Checkout = () => {
                                                 textAlign: 'left',
                                                 padding: '12px 16px',
                                                 fontSize: '13px',
-                                                borderLeft: `2px solid ${method === m.id ? '#2874f0' : 'transparent'}`,
                                                 background: method === m.id ? '#e8f0fe' : 'transparent',
                                                 color: method === m.id ? '#2874f0' : '#333',
                                                 fontWeight: method === m.id ? 600 : 400,
@@ -681,12 +710,14 @@ const Checkout = () => {
                             <div style={{ padding: '16px', fontSize: '13px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                                     <span style={{ color: '#444' }}>Price ({items.length} item{items.length > 1 ? 's' : ''})</span>
-                                    <span>₹{total.toLocaleString('en-IN')}</span>
+                                    <span>₹{originalTotal.toLocaleString('en-IN')}</span>
                                 </div>
+                                {discount > 0 && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                                    <span style={{ color: '#444' }}>Discount (15%)</span>
+                                    <span style={{ color: '#444' }}>Discount</span>
                                     <span style={{ color: '#388e3c' }}>− ₹{discount.toLocaleString('en-IN')}</span>
                                 </div>
+                                )}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                                     <span style={{ color: '#444' }}>Delivery Charges</span>
                                     {deliveryCharge === 0
@@ -698,9 +729,11 @@ const Checkout = () => {
                                     <span>Total Amount</span>
                                     <span>₹{finalTotal.toLocaleString('en-IN')}</span>
                                 </div>
+                                {discount > 0 && (
                                 <p style={{ fontSize: '12px', fontWeight: 600, color: '#388e3c' }}>
                                     You will save ₹{discount.toLocaleString('en-IN')} on this order
                                 </p>
+                                )}
                             </div>
                         </div>
 

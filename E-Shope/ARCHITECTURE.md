@@ -184,7 +184,7 @@ E-Shope/
 | GET    | `/api/products`                 | No   | List (filter: category, search)  |
 | GET    | `/api/products/:id`             | No   | Single product detail            |
 | GET    | `/api/products/categories/list` | No   | Distinct category names          |
-| POST   | `/api/products`                 | No   | Create product (public)          |
+| POST   | `/api/products`                 | JWT+Admin | Create product (admin only)  |
 
 ### Admin (`/api/admin`)
 
@@ -209,10 +209,10 @@ E-Shope/
 
 ### Orders (`/api/orders`)
 
-| Method | Path                       | Auth | Description                          |
-|--------|----------------------------|------|--------------------------------------|
-| POST   | `/api/orders`              | No   | Create order (pg transaction)        |
-| GET    | `/api/orders/user/:userId` | No   | User's order history (STRING_AGG)    |
+| Method | Path                       | Auth | Description                                    |
+|--------|----------------------------|------|------------------------------------------------|
+| POST   | `/api/orders`              | JWT  | Create order (pg transaction, stock decrement) |
+| GET    | `/api/orders/user/:userId` | JWT (own) | User's order history                      |
 
 ### Payments (`/api/payment`)
 
@@ -227,7 +227,7 @@ E-Shope/
 
 | Method | Path           | Auth | Description                            |
 |--------|----------------|------|----------------------------------------|
-| POST   | `/api/upload`  | No   | Image upload (5MB, jpeg/png/gif/webp)  |
+| POST   | `/api/upload`  | JWT  | Image upload (5MB, jpeg/png/gif/webp)  |
 
 ### Health (`/`)
 
@@ -471,10 +471,10 @@ App:  http://localhost:8080
 └────────┘                                └──────────┘
 ```
 
-- **JWT Secret**: `apnidunia_secret_2024`
+- **JWT Secret**: from `JWT_SECRET` env var (fallback `apnidunia_secret_2024` — change in production)
 - **Token Expiry**: 7 days
 - **Storage**: localStorage (client-side)
-- **Middleware**: `verifyToken()` extracts user from Bearer token
+- **Middleware**: `src/middleware/auth.js` — `verifyToken()` + `requireAdmin()` (single source of truth)
 
 ---
 

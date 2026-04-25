@@ -341,7 +341,6 @@ const Admin = () => {
                                     borderBottom: `2px solid ${activeTab === tab.id ? '#2874f0' : 'transparent'}`,
                                     color: activeTab === tab.id ? '#2874f0' : '#666',
                                     background: 'none', border: 'none',
-                                    borderBottom: `2px solid ${activeTab === tab.id ? '#2874f0' : 'transparent'}`,
                                     cursor: 'pointer', transition: 'all 0.2s',
                                 }}
                             >

@@ -7,9 +7,10 @@ A full-stack e-commerce application — React + Vite frontend, Node/Express back
 - Product catalog with categories, search, and filters
 - Shopping cart and checkout with mock PhonePe / Google Pay / UPI QR
 - **Dual login system** — Email + Password or Mobile + OTP (Flipkart-style)
-- Admin panel (product & user management, role toggle)
+- Admin panel (product & user management, role toggle, order tracking)
 - Seller panel with stats and product image upload
-- Order management with transaction tracking
+- Order management with transaction tracking and real stock decrement
+- Role-based API security — JWT authentication on all mutation endpoints
 
 ## Authentication
 
@@ -20,7 +21,7 @@ A full-stack e-commerce application — React + Vite frontend, Node/Express back
 
 - OTP login auto-creates an account if the mobile number is new
 - Registration supports both email and mobile, with Customer/Seller account types
-- Demo OTP is shown on screen (no real SMS gateway — integrate Twilio/AWS SNS for production)
+- OTP is printed to the server console (`docker compose logs backend`) — no real SMS gateway; integrate Twilio/AWS SNS for production
 
 ## Stack
 
@@ -119,34 +120,39 @@ docker compose up --build
 | Customer | `user@example.com` | `password123` |
 | Seller | `seller@apnidunia.com` | `seller123` |
 
-You can also log in with any 10-digit mobile number using the OTP flow (demo OTP is displayed on screen).
+For OTP login: use any 10-digit mobile number, then check `docker compose logs backend` for the OTP.
 
 ---
 
 ## API Endpoints
 
 ### Auth
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/register` | Register with email/phone + password |
-| POST | `/api/auth/login` | Login with email + password |
-| POST | `/api/auth/send-otp` | Send OTP to mobile number |
-| POST | `/api/auth/verify-otp` | Verify OTP and login |
-| PUT | `/api/auth/profile/:id` | Update user profile |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/auth/register` | No | Register with email/phone + password |
+| POST | `/api/auth/login` | No | Login with email + password |
+| POST | `/api/auth/send-otp` | No | Send OTP to mobile (console only) |
+| POST | `/api/auth/verify-otp` | No | Verify OTP and login |
+| PUT | `/api/auth/profile/:id` | JWT (own profile) | Update user profile |
 
 ### Products & Orders
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/products` | List products (search, category, pagination) |
-| POST | `/api/orders` | Create order |
-| GET | `/api/orders/user/:id` | Get user's orders |
-| POST | `/api/upload` | Upload product image (5MB, images only) |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/products` | No | List products (search, category, limit, offset) |
+| POST | `/api/products` | JWT + Admin | Admin product creation |
+| POST | `/api/orders` | JWT | Create order (decrements stock) |
+| GET | `/api/orders/user/:id` | JWT (own orders) | Get user's orders |
+| POST | `/api/upload` | JWT | Upload product image (5MB, images only) |
 
 ### Admin & Seller
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET/POST/PUT/DELETE | `/api/admin/*` | Admin CRUD for products & users |
-| GET/POST/PUT/DELETE | `/api/seller/*` | Seller product management + stats |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET/PUT/DELETE | `/api/admin/users/*` | JWT + Admin | User management |
+| GET/PUT/DELETE | `/api/admin/products/*` | JWT + Admin | Product management |
+| GET | `/api/admin/orders` | JWT + Admin | All orders |
+| PUT | `/api/admin/orders/:id/status` | JWT + Admin | Update order status |
+| GET/POST/PUT/DELETE | `/api/seller/products/*` | JWT + Seller | Seller product management |
+| GET | `/api/seller/stats` | JWT + Seller | Revenue and order stats |
 
 ---
 
@@ -188,7 +194,11 @@ E-Shope/
 ## Notes
 
 - Database is seeded with demo users and 21 products on first start
-- Auth uses JWT stored in LocalStorage (7-day expiry)
-- Mobile OTP is simulated (in-memory store, shown in UI) — plug in Twilio/AWS SNS for production
-- Tailwind is disabled — all styles use React inline `style={{}}`
+- Auth uses JWT stored in localStorage (7-day expiry)
+- All API mutation endpoints require JWT authentication
+- Admin routes require both `verifyToken` + `requireAdmin` middleware
+- Mobile OTP is simulated (in-memory store) — OTP printed to server console only; plug in Twilio/AWS SNS for production
+- Tailwind is installed but not used — all styles use React inline `style={{}}`
 - Product images are uploaded via multer and served statically from `/uploads/`
+- Stock is decremented on every order within the order creation transaction
+- See `DEPLOYMENT.md` for full deployment, environment variables, and production checklist

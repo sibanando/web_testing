@@ -29,9 +29,15 @@ const Cart = () => {
         }
     };
 
-    const discount = Math.round(total * 0.15);
+    const originalTotal = items.reduce((sum, item) => {
+        const price = parseFloat(item.price || 0);
+        const disc = parseInt(item.discount || 0);
+        const orig = disc > 0 ? Math.round(price / (1 - disc / 100)) : price;
+        return sum + orig * item.quantity;
+    }, 0);
+    const discount = Math.max(0, Math.round(originalTotal - total));
     const deliveryCharge = total > 500 ? 0 : 40;
-    const finalTotal = total - discount + deliveryCharge;
+    const finalTotal = total + deliveryCharge;
 
     if (items.length === 0) {
         return (
@@ -86,8 +92,8 @@ const Cart = () => {
 
                             {items.map((item) => {
                                 const price = parseFloat(item.price || 0);
-                                const itemDiscount = 15;
-                                const originalPrice = Math.round(price / (1 - itemDiscount / 100));
+                                const itemDiscount = parseInt(item.discount || 0);
+                                const originalPrice = itemDiscount > 0 ? Math.round(price / (1 - itemDiscount / 100)) : price;
 
                                 return (
                                     <div key={item.id} style={{ padding: '20px 16px', borderBottom: '1px solid #f0f0f0' }}>
@@ -110,8 +116,7 @@ const Cart = () => {
 
                                                 {/* Seller */}
                                                 <p style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>
-                                                    Seller: <span style={{ color: '#2874f0', fontWeight: 500 }}>RetailNet</span>
-                                                    <span style={{ marginLeft: '8px', color: '#388e3c', fontSize: '12px', fontWeight: 500 }}>✦ 4.2</span>
+                                                    Seller: <span style={{ color: '#2874f0', fontWeight: 500 }}>Verified Seller</span>
                                                 </p>
 
                                                 {/* Price */}
@@ -119,12 +124,16 @@ const Cart = () => {
                                                     <span style={{ fontSize: '17px', fontWeight: 700, color: '#212121' }}>
                                                         ₹{(price * item.quantity).toLocaleString('en-IN')}
                                                     </span>
-                                                    <span style={{ fontSize: '13px', color: '#aaa', textDecoration: 'line-through' }}>
-                                                        ₹{(originalPrice * item.quantity).toLocaleString('en-IN')}
-                                                    </span>
-                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#388e3c' }}>
-                                                        {itemDiscount}% off
-                                                    </span>
+                                                    {itemDiscount > 0 && (
+                                                        <>
+                                                            <span style={{ fontSize: '13px', color: '#aaa', textDecoration: 'line-through' }}>
+                                                                ₹{(originalPrice * item.quantity).toLocaleString('en-IN')}
+                                                            </span>
+                                                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#388e3c' }}>
+                                                                {itemDiscount}% off
+                                                            </span>
+                                                        </>
+                                                    )}
                                                 </div>
 
                                                 {/* Quantity + Remove */}
@@ -187,12 +196,14 @@ const Cart = () => {
                             <div style={{ padding: '16px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '12px' }}>
                                     <span style={{ color: '#444' }}>Price ({items.length} item{items.length > 1 ? 's' : ''})</span>
-                                    <span style={{ fontWeight: 500 }}>₹{total.toLocaleString('en-IN')}</span>
+                                    <span style={{ fontWeight: 500 }}>₹{originalTotal.toLocaleString('en-IN')}</span>
                                 </div>
+                                {discount > 0 && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '12px' }}>
                                     <span style={{ color: '#444' }}>Discount</span>
                                     <span style={{ fontWeight: 500, color: '#388e3c' }}>− ₹{discount.toLocaleString('en-IN')}</span>
                                 </div>
+                                )}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '12px' }}>
                                     <span style={{ color: '#444' }}>Delivery Charges</span>
                                     {deliveryCharge === 0 ? (
@@ -209,9 +220,11 @@ const Cart = () => {
                                     </div>
                                 </div>
 
+                                {discount > 0 && (
                                 <p style={{ fontSize: '12px', fontWeight: 600, color: '#388e3c', marginBottom: '16px' }}>
                                     You will save ₹{discount.toLocaleString('en-IN')} on this order
                                 </p>
+                                )}
 
                                 <button
                                     onClick={handleCheckout}

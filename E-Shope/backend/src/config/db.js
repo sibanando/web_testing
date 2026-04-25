@@ -76,6 +76,30 @@ const initDb = async () => {
         END $$;
     `);
 
+    // Add indexes for frequently queried columns
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_products_category  ON products(category);
+        CREATE INDEX IF NOT EXISTS idx_products_seller_id ON products(seller_id);
+        CREATE INDEX IF NOT EXISTS idx_orders_user_id     ON orders(user_id);
+        CREATE INDEX IF NOT EXISTS idx_order_items_order_id   ON order_items(order_id);
+        CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
+    `);
+
+    // Ensure order_items cascade on order delete (idempotent via constraint name check)
+    await pool.query(`
+        DO $$ BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.table_constraints
+                WHERE constraint_name = 'order_items_order_id_cascade'
+            ) THEN
+                ALTER TABLE order_items
+                    DROP CONSTRAINT IF EXISTS order_items_order_id_fkey,
+                    ADD CONSTRAINT order_items_order_id_cascade
+                        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE;
+            END IF;
+        END $$;
+    `);
+
     // ─── Seed Products ────────────────────────────────────────────────────────
     const { rows: [{ cnt }] } = await pool.query('SELECT COUNT(*) as cnt FROM products');
     if (parseInt(cnt) === 0) {
@@ -109,7 +133,7 @@ const initDb = async () => {
                 [p.name, p.price, p.description, p.category, p.images, p.rating, p.reviews, p.discount, p.stock]
             );
         }
-        console.log('✓ Database seeded with 21 products');
+        console.log(`✓ Database seeded with ${seedProducts.length} products`);
     }
 
     // ─── Seed Demo User ───────────────────────────────────────────────────────

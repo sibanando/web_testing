@@ -1,25 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
+const { verifyToken } = require('../middleware/auth');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'apnidunia_secret_2024';
-
-// Middleware: verify JWT and require is_seller
+// Middleware: verify JWT and require is_seller or is_admin
 const verifySeller = (req, res, next) => {
-    const auth = req.headers.authorization;
-    if (!auth || !auth.startsWith('Bearer '))
-        return res.status(401).json({ message: 'Unauthorized' });
-    try {
-        const decoded = jwt.verify(auth.slice(7), JWT_SECRET);
-        if (!decoded.is_seller && !decoded.is_admin)
+    verifyToken(req, res, () => {
+        if (!req.user.is_seller && !req.user.is_admin)
             return res.status(403).json({ message: 'Seller access required' });
-        req.user = decoded;
         next();
-    } catch {
-        return res.status(401).json({ message: 'Invalid token' });
-    }
+    });
 };
 
 // GET /api/seller/products — seller's own products
@@ -125,31 +116,37 @@ router.get('/stats', verifySeller, async (req, res) => {
     }
 });
 
-// PUT /api/seller/profile/:id — update seller profile/password
+// PUT /api/seller/profile/:id — update seller profile/password (own profile only)
 router.put('/profile/:id', verifySeller, async (req, res) => {
     try {
         const { id } = req.params;
+        const requestedId = parseInt(id);
+
+        if (req.user.id !== requestedId && !req.user.is_admin) {
+            return res.status(403).json({ message: 'You can only update your own profile' });
+        }
+
         const { name, email, currentPassword, newPassword } = req.body;
         if (!name || !email) return res.status(400).json({ message: 'Name and email required' });
 
-        const user = (await db.query('SELECT * FROM users WHERE id = $1', [id])).rows[0];
+        const user = (await db.query('SELECT * FROM users WHERE id = $1', [requestedId])).rows[0];
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        const taken = (await db.query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, id])).rows[0];
+        const taken = (await db.query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, requestedId])).rows[0];
         if (taken) return res.status(409).json({ message: 'Email already in use' });
 
         if (newPassword && newPassword.trim()) {
             if (!currentPassword || !bcrypt.compareSync(currentPassword, user.password))
                 return res.status(401).json({ message: 'Current password is incorrect' });
             const hash = bcrypt.hashSync(newPassword.trim(), 10);
-            await db.query('UPDATE users SET name=$1, email=$2, password=$3 WHERE id=$4', [name, email, hash, id]);
+            await db.query('UPDATE users SET name=$1, email=$2, password=$3 WHERE id=$4', [name, email, hash, requestedId]);
         } else {
-            await db.query('UPDATE users SET name=$1, email=$2 WHERE id=$3', [name, email, id]);
+            await db.query('UPDATE users SET name=$1, email=$2 WHERE id=$3', [name, email, requestedId]);
         }
 
         res.json({
             message: 'Profile updated',
-            user: { id: parseInt(id), name, email, is_seller: user.is_seller || 1, is_admin: user.is_admin || 0 }
+            user: { id: requestedId, name, email, is_seller: user.is_seller || 1, is_admin: user.is_admin || 0 }
         });
     } catch (err) {
         res.status(500).json({ message: 'Update failed' });
