@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(netstat:*)",
+      "Bash(docker info:*)",
+      "Bash(docker compose:*)",
+      "Bash(mysql:*)",
+      "Bash(cmd /c \"sc query type= all state= all | findstr -i mysql\")",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}

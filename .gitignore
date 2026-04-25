@@ -1,0 +1,31 @@
+# Large backup files
+E-Shope/e-shope-images-backup.tar
+E-Shope/postgres-backup-*.sql
+*.tar
+
+# Local data volumes
+E-Shope/postgres-data/
+E-Shope/pg-data/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Build output
+dist/
+build/
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
