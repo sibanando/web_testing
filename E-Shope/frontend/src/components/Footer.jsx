@@ -58,7 +58,7 @@ const Footer = () => {
     return (
         <footer style={{ background: '#0f172a', color: '#fff', borderTop: '4px solid transparent', backgroundClip: 'padding-box', position: 'relative' }}>
             {/* Gradient top accent */}
-            <div style={{ height: '4px', background: 'linear-gradient(to right, #1a3f9c, #2563eb, #fbbf24, #f97316)', position: 'absolute', top: 0, left: 0, right: 0 }} />
+            <div style={{ height: '4px', background: 'linear-gradient(to right, #E85D04, #FB8500, #fbbf24, #f97316)', position: 'absolute', top: 0, left: 0, right: 0 }} />
 
             <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '48px 16px 32px' }}>
 
@@ -166,7 +166,7 @@ const Footer = () => {
                 {/* Copyright */}
                 <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #1e293b', textAlign: 'center' }}>
                     <span style={{ fontSize: '12px', fontWeight: 500 }}>
-                        <span style={{ background: 'linear-gradient(to right, #2563eb, #fbbf24)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>ApniDunia.com</span>
+                        <span style={{ background: 'linear-gradient(to right, #E85D04, #FB8500)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>ApniDunia.com</span>
                         <span style={{ color: '#475569' }}> — © 2007-2026 ApniDunia Internet Private Limited. India's #1 E-Commerce Platform</span>
                     </span>
                 </div>

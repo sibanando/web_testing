@@ -2,6 +2,11 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'apnidunia_secret_2024';
 
+if (process.env.NODE_ENV === 'production' && JWT_SECRET === 'apnidunia_secret_2024') {
+    console.error('FATAL: Default JWT_SECRET in production. Set a strong secret.');
+    process.exit(1);
+}
+
 const verifyToken = (req, res, next) => {
     const auth = req.headers.authorization;
     if (!auth || !auth.startsWith('Bearer '))

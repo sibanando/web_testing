@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: apnidunia
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: apnidunia_pg_2024
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-apnidunia_pg_2024}
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./db-seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
@@ -24,9 +24,11 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - JWT_SECRET=apnidunia_secret_2024
-      - DATABASE_URL=postgresql://postgres:apnidunia_pg_2024@postgres:5432/apnidunia
+      - JWT_SECRET=${JWT_SECRET:-apnidunia_secret_2024}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-apnidunia_pg_2024}@postgres:5432/apnidunia
       - PORT=5000
+      - FAST2SMS_API_KEY=${FAST2SMS_API_KEY:-}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
     depends_on:
       postgres:
         condition: service_healthy

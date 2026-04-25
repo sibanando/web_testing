@@ -19,7 +19,7 @@ function App() {
   return (
     <>
       <Navbar />
-      <Suspense fallback={<div style={{ textAlign: 'center', padding: '60px', color: '#2874f0' }}>Loading...</div>}>
+      <Suspense fallback={<div style={{ textAlign: 'center', padding: '60px', color: '#E85D04', fontSize: '14px', fontWeight: 600 }}>Loading…</div>}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/cart" element={<Cart />} />

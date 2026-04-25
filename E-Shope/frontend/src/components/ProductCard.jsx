@@ -36,10 +36,10 @@ const ProductCard = ({ product, compact = false }) => {
 
     if (compact) {
         return (
-            <Link to={`/product/${product.id}`} style={{ textDecoration: 'none', display: 'block', background: 'white', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e8ecf4', cursor: 'pointer', transition: 'all 0.22s' }}
-                onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(26,63,156,0.12)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = '#c7d3f0'; }}
-                onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = '#e8ecf4'; }}>
-                <div style={{ position: 'relative', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8faff', height: '130px', overflow: 'hidden' }}>
+            <Link to={`/product/${product.id}`} style={{ textDecoration: 'none', display: 'block', background: 'white', borderRadius: '8px', overflow: 'hidden', border: '1px solid #F5F0EA', cursor: 'pointer', transition: 'all 0.22s' }}
+                onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(232,93,4,0.12)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = '#FDE0C0'; }}
+                onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = '#F5F0EA'; }}>
+                <div style={{ position: 'relative', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FFFBF5', height: '130px', overflow: 'hidden' }}>
                     <img src={getProductImage()} alt={product.name}
                         style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
                         onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='250' height='250'%3E%3Crect width='250' height='250' fill='%23f0f4ff'/%3E%3Ctext x='125' y='120' text-anchor='middle' font-family='Arial' font-size='13' fill='%2394a3b8'%3ENo Image%3C/text%3E%3C/svg%3E"; }} />
@@ -66,12 +66,12 @@ const ProductCard = ({ product, compact = false }) => {
     }
 
     return (
-        <Link to={`/product/${product.id}`} style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', background: 'white', cursor: 'pointer', border: '1px solid #e8ecf4', borderRadius: '2px', transition: 'all 0.22s', position: 'relative', overflow: 'hidden' }}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 30px rgba(26,63,156,0.13)'; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = '#c7d3f0'; }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = '#e8ecf4'; }}>
+        <Link to={`/product/${product.id}`} style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', background: 'white', cursor: 'pointer', border: '1px solid #F5F0EA', borderRadius: '8px', transition: 'all 0.22s', position: 'relative', overflow: 'hidden' }}
+            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 30px rgba(232,93,4,0.13)'; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = '#FDE0C0'; }}
+            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = '#F5F0EA'; }}>
 
             {/* Image */}
-            <div style={{ position: 'relative', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(145deg, #f8faff, #f0f4ff)', height: '200px', overflow: 'hidden' }}>
+            <div style={{ position: 'relative', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(145deg, #FFFBF5, #FFF3DC)', height: '200px', overflow: 'hidden' }}>
                 <img src={getProductImage()} alt={product.name}
                     style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', transition: 'transform 0.3s ease' }}
                     onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.07)'}
@@ -122,7 +122,7 @@ const ProductCard = ({ product, compact = false }) => {
                 <p style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginBottom: '10px' }}>✦ Free Delivery</p>
 
                 <button onClick={handleAdd} disabled={adding}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '9px', fontSize: '13px', fontWeight: 600, borderRadius: '6px', border: 'none', cursor: adding ? 'default' : 'pointer', background: adding ? 'linear-gradient(135deg, #059669, #10b981)' : 'linear-gradient(135deg, #1a3f9c, #2563eb)', color: 'white', boxShadow: adding ? '0 4px 12px rgba(5,150,105,0.3)' : '0 4px 12px rgba(26,63,156,0.3)', transition: 'all 0.2s' }}>
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '9px', fontSize: '13px', fontWeight: 600, borderRadius: '6px', border: 'none', cursor: adding ? 'default' : 'pointer', background: adding ? 'linear-gradient(135deg, #059669, #10b981)' : 'linear-gradient(135deg, #E85D04, #FB8500)', color: 'white', boxShadow: adding ? '0 4px 12px rgba(5,150,105,0.3)' : '0 4px 12px rgba(232,93,4,0.3)', transition: 'all 0.2s' }}>
                     {adding ? <Check size={15} /> : <ShoppingCart size={15} />}
                     {adding ? 'Added!' : 'Add to Cart'}
                 </button>

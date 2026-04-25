@@ -43,7 +43,7 @@ const Navbar = () => {
     };
 
     return (
-        <nav style={{ background: 'linear-gradient(135deg, #0d1b3e 0%, #112d6e 55%, #1a3f9c 100%)', boxShadow: '0 4px 20px rgba(0,0,0,0.3)', position: 'sticky', top: 0, zIndex: 50 }}>
+        <nav style={{ background: '#1C1917', boxShadow: '0 4px 20px rgba(0,0,0,0.35)', position: 'sticky', top: 0, zIndex: 50 }}>
 
             {/* Main Navbar Row */}
             <div style={{ maxWidth: '1280px', margin: '0 auto', padding: isMobile ? '10px 12px' : '10px 16px', display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '12px' }}>
@@ -73,7 +73,7 @@ const Navbar = () => {
                                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                                 style={{ flex: 1, padding: '11px 16px', fontSize: '14px', color: '#1e293b', background: 'white', border: 'none', outline: 'none' }}
                             />
-                            <button onClick={handleSearch} style={{ padding: '11px 20px', background: 'linear-gradient(135deg, #1a3f9c, #2563eb)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <button onClick={handleSearch} style={{ padding: '11px 20px', background: 'linear-gradient(135deg, #E85D04, #FB8500)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Search size={20} />
                             </button>
                         </div>
@@ -108,7 +108,7 @@ const Navbar = () => {
                                     </button>
                                     {showUserMenu && (
                                         <div style={{ position: 'absolute', right: 0, marginTop: '8px', width: '220px', background: 'white', boxShadow: '0 12px 40px rgba(0,0,0,0.2)', borderRadius: '10px', border: '1px solid #e8ecf4', zIndex: 50, overflow: 'hidden' }}>
-                                            <div style={{ padding: '16px', background: 'linear-gradient(135deg, #0d1b3e, #1a3f9c)' }}>
+                                            <div style={{ padding: '16px', background: '#1C1917' }}>
                                                 <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #fbbf24, #f97316)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800, color: 'white', marginBottom: '8px' }}>
                                                     {user.name.charAt(0).toUpperCase()}
                                                 </div>
@@ -117,9 +117,9 @@ const Navbar = () => {
                                             </div>
                                             <Link to="/profile" onClick={() => setShowUserMenu(false)}
                                                 style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', fontSize: '13px', color: '#374151', textDecoration: 'none', borderBottom: '1px solid #f3f4f6' }}
-                                                onMouseEnter={e => e.currentTarget.style.background = '#f0f4ff'}
+                                                onMouseEnter={e => e.currentTarget.style.background = '#fff5eb'}
                                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                                <User size={15} color="#1a3f9c" /> My Account
+                                                <User size={15} color="#E85D04" /> My Account
                                             </Link>
                                             <button onClick={() => { logout(); setShowUserMenu(false); }}
                                                 style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '12px 16px', fontSize: '13px', color: '#dc2626', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
@@ -132,7 +132,7 @@ const Navbar = () => {
                                 </div>
                             ) : (
                                 <Link to="/login"
-                                    style={{ background: 'white', color: '#1a3f9c', fontWeight: 700, padding: '7px 22px', borderRadius: '6px', fontSize: '13px', textDecoration: 'none', display: 'inline-block', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
+                                    style={{ background: 'white', color: '#E85D04', fontWeight: 700, padding: '7px 22px', borderRadius: '6px', fontSize: '13px', textDecoration: 'none', display: 'inline-block', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
                                     Login
                                 </Link>
                             )}
@@ -142,7 +142,7 @@ const Navbar = () => {
                     {/* Admin + Seller buttons — desktop only */}
                     {!isMobile && !isTablet && user && user.is_admin === 1 && (
                         <Link to="/admin"
-                            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, padding: '7px 12px', borderRadius: '6px', textDecoration: 'none', ...(isAdmin ? { background: '#fbbf24', color: '#1e293b' } : { background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.2)' }) }}>
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, padding: '7px 12px', borderRadius: '6px', textDecoration: 'none', ...(isAdmin ? { background: '#FB8500', color: 'white' } : { background: 'rgba(255,255,255,0.12)', color: 'white', border: '1px solid rgba(255,255,255,0.2)' }) }}>
                             <Settings size={14} /> Admin
                         </Link>
                     )}
@@ -198,7 +198,7 @@ const Navbar = () => {
                             autoFocus
                             style={{ flex: 1, padding: '11px 16px', fontSize: '14px', color: '#1e293b', background: 'white', border: 'none', outline: 'none' }}
                         />
-                        <button onClick={handleSearch} style={{ padding: '11px 18px', background: 'linear-gradient(135deg, #1a3f9c, #2563eb)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <button onClick={handleSearch} style={{ padding: '11px 18px', background: 'linear-gradient(135deg, #E85D04, #FB8500)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                             <Search size={18} />
                         </button>
                     </div>
@@ -207,7 +207,7 @@ const Navbar = () => {
 
             {/* Mobile Drawer Menu */}
             {isMobile && showMobileMenu && (
-                <div style={{ background: 'rgba(13,27,62,0.98)', borderTop: '1px solid rgba(255,255,255,0.1)', padding: '12px' }}>
+                <div style={{ background: 'rgba(28,25,23,0.99)', borderTop: '1px solid rgba(232,93,4,0.15)', padding: '12px' }}>
                     {user ? (
                         <div style={{ marginBottom: '10px', padding: '12px', background: 'rgba(255,255,255,0.08)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, #fbbf24, #f97316)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800, color: 'white', flexShrink: 0 }}>
@@ -220,7 +220,7 @@ const Navbar = () => {
                         </div>
                     ) : (
                         <Link to="/login" onClick={() => setShowMobileMenu(false)}
-                            style={{ display: 'block', background: 'white', color: '#1a3f9c', fontWeight: 700, padding: '11px', borderRadius: '8px', fontSize: '14px', textDecoration: 'none', textAlign: 'center', marginBottom: '10px' }}>
+                            style={{ display: 'block', background: 'white', color: '#E85D04', fontWeight: 700, padding: '11px', borderRadius: '8px', fontSize: '14px', textDecoration: 'none', textAlign: 'center', marginBottom: '10px' }}>
                             Login / Register
                         </Link>
                     )}
@@ -261,7 +261,7 @@ const Navbar = () => {
 
             {/* Category Navigation Bar — tablet + desktop */}
             {!isAdmin && !isMobile && (
-                <div style={{ background: 'rgba(255,255,255,0.96)', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+                <div style={{ background: '#FFFBF5', borderTop: '1px solid rgba(232,93,4,0.12)' }}>
                     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto' }}>
                             {categories.map((cat) => {
@@ -269,9 +269,9 @@ const Navbar = () => {
                                 return (
                                     <button key={cat}
                                         onClick={() => navigate(isActive ? '/' : `/?category=${encodeURIComponent(cat)}`)}
-                                        style={{ flexShrink: 0, padding: '10px 14px', fontSize: '13px', fontWeight: isActive ? 700 : 500, color: isActive ? '#1a3f9c' : '#374151', whiteSpace: 'nowrap', borderBottom: isActive ? '3px solid #1a3f9c' : '3px solid transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', textDecoration: 'none', transition: 'all 0.18s', background: isActive ? '#f0f4ff' : 'transparent', cursor: 'pointer' }}
-                                        onMouseEnter={e => { e.currentTarget.style.color = '#1a3f9c'; e.currentTarget.style.borderBottomColor = '#1a3f9c'; e.currentTarget.style.background = '#f0f4ff'; }}
-                                        onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = '#374151'; e.currentTarget.style.borderBottomColor = 'transparent'; e.currentTarget.style.background = 'transparent'; } }}>
+                                        style={{ flexShrink: 0, padding: '10px 14px', fontSize: '13px', fontWeight: isActive ? 700 : 500, color: isActive ? '#E85D04' : '#44403C', whiteSpace: 'nowrap', borderBottom: isActive ? '3px solid #E85D04' : '3px solid transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', textDecoration: 'none', transition: 'all 0.18s', background: isActive ? '#FFF0E4' : 'transparent', cursor: 'pointer' }}
+                                        onMouseEnter={e => { e.currentTarget.style.color = '#E85D04'; e.currentTarget.style.borderBottomColor = '#E85D04'; e.currentTarget.style.background = '#FFF0E4'; }}
+                                        onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = '#44403C'; e.currentTarget.style.borderBottomColor = 'transparent'; e.currentTarget.style.background = 'transparent'; } }}>
                                         {cat}
                                     </button>
                                 );

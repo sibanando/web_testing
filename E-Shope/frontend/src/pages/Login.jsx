@@ -24,6 +24,7 @@ const Login = () => {
 
     // OTP state
     const [otpSent, setOtpSent] = useState(false);
+    const [otpVia, setOtpVia] = useState('console'); // 'sms' | 'console'
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [otpTimer, setOtpTimer] = useState(0);
     const otpRefs = useRef([]);
@@ -54,6 +55,7 @@ const Login = () => {
         setLoading(false);
         if (result.success) {
             setOtpSent(true);
+            setOtpVia(result.via || 'console');
             startTimer();
         } else {
             setError(result.message);
@@ -141,23 +143,23 @@ const Login = () => {
         setIsRegister(register);
         setError('');
         setOtpSent(false);
+        setOtpVia('console');
         setOtp(['', '', '', '', '', '']);
-        setDemoOtp('');
     };
 
     const switchMethod = (method) => {
         setLoginMethod(method);
         setError('');
         setOtpSent(false);
+        setOtpVia('console');
         setOtp(['', '', '', '', '', '']);
-        setDemoOtp('');
     };
 
     const getInputStyle = (field) => ({
         width: '100%',
         padding: '14px 16px 14px 44px',
         border: 'none',
-        borderBottom: `2px solid ${focusedField === field ? '#6366f1' : 'rgba(255,255,255,0.15)'}`,
+        borderBottom: `2px solid ${focusedField === field ? '#E85D04' : 'rgba(255,255,255,0.15)'}`,
         borderRadius: '12px 12px 0 0',
         fontSize: '14px',
         outline: 'none',
@@ -170,7 +172,7 @@ const Login = () => {
 
     const iconStyle = (field) => ({
         position: 'absolute', left: '14px', top: '15px',
-        color: focusedField === field ? '#a5b4fc' : 'rgba(255,255,255,0.35)',
+        color: focusedField === field ? '#FDBA74' : 'rgba(255,255,255,0.35)',
         transition: 'color 0.3s ease', zIndex: 1,
     });
 
@@ -185,7 +187,7 @@ const Login = () => {
                             display: 'flex', alignItems: 'center',
                             background: 'rgba(255,255,255,0.06)',
                             borderRadius: '12px 12px 0 0',
-                            borderBottom: `2px solid ${focusedField === 'phone' ? '#6366f1' : 'rgba(255,255,255,0.15)'}`,
+                            borderBottom: `2px solid ${focusedField === 'phone' ? '#E85D04' : 'rgba(255,255,255,0.15)'}`,
                             transition: 'all 0.3s ease',
                         }}>
                             <span style={{
@@ -221,10 +223,10 @@ const Login = () => {
                         style={{
                             width: '100%', padding: '14px', fontWeight: 700, fontSize: '14px',
                             borderRadius: '12px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
-                            background: loading ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                            background: loading ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #E85D04, #FB8500)',
                             color: 'white', marginTop: '6px',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            boxShadow: loading ? 'none' : '0 8px 24px rgba(99,102,241,0.3)',
+                            boxShadow: loading ? 'none' : '0 8px 24px rgba(232,93,4,0.35)',
                             transition: 'all 0.3s ease',
                         }}>
                         {loading ? 'Sending OTP...' : 'Request OTP'}
@@ -234,31 +236,33 @@ const Login = () => {
             ) : (
                 <>
                     <div style={{
-                        background: 'rgba(99,102,241,0.08)',
+                        background: 'rgba(232,93,4,0.1)',
                         borderRadius: '12px',
                         padding: '12px 16px',
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     }}>
                         <div>
                             <p style={{ margin: 0, fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>OTP sent to</p>
-                            <p style={{ margin: '2px 0 0', fontSize: '14px', color: '#c7d2fe', fontWeight: 600, letterSpacing: '0.5px' }}>+91 {phone}</p>
+                            <p style={{ margin: '2px 0 0', fontSize: '14px', color: '#FDBA74', fontWeight: 600, letterSpacing: '0.5px' }}>+91 {phone}</p>
                         </div>
-                        <button type="button" onClick={() => { setOtpSent(false); setOtp(['', '', '', '', '', '']); setDemoOtp(''); }}
-                            style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                        <button type="button" onClick={() => { setOtpSent(false); setOtpVia('console'); setOtp(['', '', '', '', '', '']); }}
+                            style={{ background: 'none', border: 'none', color: '#FB8500', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
                             Change
                         </button>
                     </div>
 
                     <div style={{
-                        background: 'rgba(251,191,36,0.1)',
-                        border: '1px solid rgba(251,191,36,0.25)',
+                        background: otpVia === 'sms' ? 'rgba(5,150,105,0.1)' : 'rgba(251,191,36,0.1)',
+                        border: `1px solid ${otpVia === 'sms' ? 'rgba(5,150,105,0.3)' : 'rgba(251,191,36,0.25)'}`,
                         borderRadius: '10px',
                         padding: '10px 14px',
                         display: 'flex', alignItems: 'center', gap: '8px',
                     }}>
-                        <Shield size={14} style={{ color: '#fbbf24' }} />
-                        <span style={{ fontSize: '12px', color: '#fcd34d' }}>
-                            OTP sent to your mobile number. Check the server console for the demo OTP.
+                        <Shield size={14} style={{ color: otpVia === 'sms' ? '#34d399' : '#fbbf24' }} />
+                        <span style={{ fontSize: '12px', color: otpVia === 'sms' ? '#6ee7b7' : '#fcd34d' }}>
+                            {otpVia === 'sms'
+                                ? 'OTP sent via SMS to your mobile number.'
+                                : 'No SMS key set — run: docker compose logs backend  to see the OTP.'}
                         </span>
                     </div>
 
@@ -283,13 +287,13 @@ const Login = () => {
                                         width: '44px', height: '52px',
                                         textAlign: 'center',
                                         fontSize: '20px', fontWeight: 700,
-                                        border: `2px solid ${focusedField === `otp-${i}` ? '#6366f1' : digit ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.15)'}`,
+                                        border: `2px solid ${focusedField === `otp-${i}` ? '#E85D04' : digit ? 'rgba(232,93,4,0.5)' : 'rgba(255,255,255,0.15)'}`,
                                         borderRadius: '12px',
-                                        background: digit ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.04)',
+                                        background: digit ? 'rgba(232,93,4,0.12)' : 'rgba(255,255,255,0.04)',
                                         color: '#f0f0f0',
                                         outline: 'none',
                                         transition: 'all 0.2s ease',
-                                        caretColor: '#6366f1',
+                                        caretColor: '#E85D04',
                                     }}
                                 />
                             ))}
@@ -299,11 +303,11 @@ const Login = () => {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '4px' }}>
                         {otpTimer > 0 ? (
                             <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>
-                                Resend OTP in <strong style={{ color: '#a5b4fc' }}>{otpTimer}s</strong>
+                                Resend OTP in <strong style={{ color: '#FDBA74' }}>{otpTimer}s</strong>
                             </span>
                         ) : (
                             <button type="button" onClick={handleSendOtp} disabled={loading}
-                                style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                                style={{ background: 'none', border: 'none', color: '#FB8500', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
                                 Resend OTP
                             </button>
                         )}
@@ -316,10 +320,10 @@ const Login = () => {
                             cursor: (loading || otp.join('').length !== 6) ? 'not-allowed' : 'pointer',
                             background: (loading || otp.join('').length !== 6)
                                 ? 'rgba(255,255,255,0.1)'
-                                : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                : 'linear-gradient(135deg, #E85D04, #FB8500)',
                             color: 'white',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                            boxShadow: (loading || otp.join('').length !== 6) ? 'none' : '0 8px 24px rgba(99,102,241,0.3)',
+                            boxShadow: (loading || otp.join('').length !== 6) ? 'none' : '0 8px 24px rgba(232,93,4,0.35)',
                             transition: 'all 0.3s ease',
                         }}>
                         {loading ? 'Verifying...' : 'Verify & Login'}
@@ -335,13 +339,13 @@ const Login = () => {
             minHeight: '100vh',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: '32px 16px',
-            background: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)',
+            background: 'linear-gradient(135deg, #1C0A00 0%, #3D1A00 45%, #1C0A00 100%)',
             position: 'relative', overflow: 'hidden',
         }}>
             {/* Floating orbs */}
-            <div style={{ position: 'absolute', top: '-120px', right: '-80px', width: '350px', height: '350px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', bottom: '-100px', left: '-60px', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(168,85,247,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', top: '40%', left: '60%', width: '200px', height: '200px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', top: '-120px', right: '-80px', width: '350px', height: '350px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(232,93,4,0.22) 0%, transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', bottom: '-100px', left: '-60px', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(251,133,0,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', top: '40%', left: '60%', width: '200px', height: '200px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(253,186,116,0.1) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
             <div style={{
                 width: '100%', maxWidth: '440px',
@@ -356,10 +360,10 @@ const Login = () => {
                 <div style={{ padding: '32px 32px 0', textAlign: 'center' }}>
                     <div style={{
                         width: '56px', height: '56px', borderRadius: '16px',
-                        background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                        background: 'linear-gradient(135deg, #E85D04, #FB8500)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         margin: '0 auto 16px',
-                        boxShadow: '0 8px 24px rgba(99,102,241,0.35)',
+                        boxShadow: '0 8px 24px rgba(232,93,4,0.4)',
                     }}>
                         <ShoppingBag size={26} style={{ color: 'white' }} />
                     </div>
@@ -386,10 +390,10 @@ const Login = () => {
                                         flex: 1, padding: '10px', fontSize: '13px', fontWeight: 600,
                                         border: 'none', cursor: 'pointer',
                                         borderRadius: '9px',
-                                        background: active ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent',
+                                        background: active ? 'linear-gradient(135deg, #E85D04, #FB8500)' : 'transparent',
                                         color: active ? 'white' : 'rgba(255,255,255,0.4)',
                                         transition: 'all 0.3s ease',
-                                        boxShadow: active ? '0 4px 12px rgba(99,102,241,0.3)' : 'none',
+                                        boxShadow: active ? '0 4px 12px rgba(232,93,4,0.35)' : 'none',
                                     }}>
                                     {tab}
                                 </button>
@@ -418,8 +422,8 @@ const Login = () => {
                                             flex: 1, padding: '9px 8px',
                                             border: 'none', cursor: 'pointer',
                                             borderRadius: '8px',
-                                            background: active ? 'rgba(99,102,241,0.15)' : 'transparent',
-                                            color: active ? '#c7d2fe' : 'rgba(255,255,255,0.35)',
+                                            background: active ? 'rgba(232,93,4,0.2)' : 'transparent',
+                                            color: active ? '#FDBA74' : 'rgba(255,255,255,0.35)',
                                             fontSize: '12px', fontWeight: 600,
                                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                                             transition: 'all 0.2s ease',
@@ -473,10 +477,10 @@ const Login = () => {
                                 style={{
                                     width: '100%', padding: '14px', fontWeight: 700, fontSize: '14px',
                                     borderRadius: '12px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
-                                    background: loading ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                    background: loading ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #E85D04, #FB8500)',
                                     color: 'white', marginTop: '6px',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                                    boxShadow: loading ? 'none' : '0 8px 24px rgba(99,102,241,0.3)',
+                                    boxShadow: loading ? 'none' : '0 8px 24px rgba(232,93,4,0.35)',
                                     transition: 'all 0.3s ease',
                                 }}>
                                 {loading ? 'Signing in...' : 'Sign In'}
@@ -505,19 +509,19 @@ const Login = () => {
                                     <button key={t.id} type="button" onClick={() => setAccountType(t.id)}
                                         style={{
                                             flex: 1, padding: '12px 10px',
-                                            border: `1px solid ${accountType === t.id ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                                            border: `1px solid ${accountType === t.id ? 'rgba(232,93,4,0.5)' : 'rgba(255,255,255,0.1)'}`,
                                             borderRadius: '12px', cursor: 'pointer',
-                                            background: accountType === t.id ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.03)',
+                                            background: accountType === t.id ? 'rgba(232,93,4,0.12)' : 'rgba(255,255,255,0.03)',
                                             transition: 'all 0.3s ease',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                                         }}>
-                                        <span style={{ color: accountType === t.id ? '#a5b4fc' : 'rgba(255,255,255,0.3)' }}>{t.icon}</span>
-                                        <span style={{ fontSize: '13px', fontWeight: 600, color: accountType === t.id ? '#c7d2fe' : 'rgba(255,255,255,0.35)' }}>{t.label}</span>
+                                        <span style={{ color: accountType === t.id ? '#FDBA74' : 'rgba(255,255,255,0.3)' }}>{t.icon}</span>
+                                        <span style={{ fontSize: '13px', fontWeight: 600, color: accountType === t.id ? '#FDE0B8' : 'rgba(255,255,255,0.35)' }}>{t.label}</span>
                                     </button>
                                 ))}
                             </div>
                             {accountType === 'seller' && (
-                                <p style={{ fontSize: '11px', color: '#a78bfa', margin: '-4px 0 0 4px', fontWeight: 500 }}>
+                                <p style={{ fontSize: '11px', color: '#FDBA74', margin: '-4px 0 0 4px', fontWeight: 500 }}>
                                     You'll get a Seller Panel to list products
                                 </p>
                             )}
@@ -567,7 +571,7 @@ const Login = () => {
                                         display: 'flex', alignItems: 'center',
                                         background: 'rgba(255,255,255,0.06)',
                                         borderRadius: '12px 12px 0 0',
-                                        borderBottom: `2px solid ${focusedField === 'phone' ? '#6366f1' : 'rgba(255,255,255,0.15)'}`,
+                                        borderBottom: `2px solid ${focusedField === 'phone' ? '#E85D04' : 'rgba(255,255,255,0.15)'}`,
                                         transition: 'all 0.3s ease',
                                     }}>
                                         <span style={{
@@ -605,10 +609,10 @@ const Login = () => {
                                 style={{
                                     width: '100%', padding: '14px', fontWeight: 700, fontSize: '14px',
                                     borderRadius: '12px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
-                                    background: loading ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                    background: loading ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #E85D04, #FB8500)',
                                     color: 'white', marginTop: '6px',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                                    boxShadow: loading ? 'none' : '0 8px 24px rgba(99,102,241,0.3)',
+                                    boxShadow: loading ? 'none' : '0 8px 24px rgba(232,93,4,0.35)',
                                     transition: 'all 0.3s ease',
                                 }}>
                                 {loading ? 'Creating Account...' : 'Create Account'}
@@ -619,8 +623,8 @@ const Login = () => {
 
                     <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.25)', lineHeight: 1.6, margin: '16px 0 0', textAlign: 'center' }}>
                         By continuing, you agree to our{' '}
-                        <span style={{ color: 'rgba(165,180,252,0.6)', cursor: 'pointer' }}>Terms</span> &{' '}
-                        <span style={{ color: 'rgba(165,180,252,0.6)', cursor: 'pointer' }}>Privacy Policy</span>
+                        <span style={{ color: 'rgba(253,186,116,0.7)', cursor: 'pointer' }}>Terms</span> &{' '}
+                        <span style={{ color: 'rgba(253,186,116,0.7)', cursor: 'pointer' }}>Privacy Policy</span>
                     </p>
 
                     {/* Demo credentials */}

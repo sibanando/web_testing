@@ -1,121 +1,254 @@
 # Deployment Guide — E-Shope (ApniDunia)
 
+## Table of Contents
+1. [Quick Start — Docker Compose](#1-quick-start--docker-compose)
+2. [Environment Variables](#2-environment-variables)
+3. [Kubernetes / kind (local staging)](#3-kubernetes--kind-local-staging)
+4. [Production Kubernetes (cloud)](#4-production-kubernetes-cloud)
+5. [Enabling TLS / HTTPS](#5-enabling-tls--https)
+6. [SMS OTP Setup](#6-sms-otp-setup)
+7. [Database](#7-database)
+8. [CI/CD — GitHub Actions](#8-cicd--github-actions)
+9. [After Code Changes](#9-after-code-changes)
+10. [Production Checklist](#10-production-checklist)
+
 ---
 
-## Quick Start
-
-### Docker Compose (local dev / demo)
+## 1. Quick Start — Docker Compose
 
 ```bash
-# First time or after code changes
+# 1. Copy env template
+cp .env.example .env
+# Edit .env — at minimum change JWT_SECRET and POSTGRES_PASSWORD
+
+# 2. Build and start
 docker compose up --build -d
 
-# Stop
-docker compose down
-
-# Logs
-docker compose logs -f backend
-docker compose logs -f frontend
+# 3. Open
+open http://localhost:5555          # frontend
+curl http://localhost:5000/health   # backend liveness
+curl http://localhost:5000/ready    # backend + DB readiness
 ```
 
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:5555 |
 | Backend API | http://localhost:5000 |
-| Health check | http://localhost:5000/health |
+| Liveness | http://localhost:5000/health |
+| Readiness | http://localhost:5000/ready |
+
+```bash
+docker compose down          # stop (keep data)
+docker compose down -v       # stop + wipe DB volume
+docker compose logs -f backend
+docker compose logs -f frontend
+```
 
 ---
 
-### Kubernetes / kind (staging)
+## 2. Environment Variables
 
+Copy `.env.example` to `.env` and fill in all values.
+
+| Variable | Default | Production |
+|----------|---------|------------|
+| `JWT_SECRET` | `apnidunia_secret_2024` | **REQUIRED** — `openssl rand -hex 64` |
+| `POSTGRES_PASSWORD` | `apnidunia_pg_2024` | **REQUIRED** — strong password |
+| `DATABASE_URL` | built from POSTGRES_PASSWORD | Full DSN for external DB |
+| `ALLOWED_ORIGINS` | open | `https://yourdomain.com` |
+| `FAST2SMS_API_KEY` | (empty = console log) | Free key at fast2sms.com |
+| `DB_SSL` | `false` | `true` for RDS / Cloud SQL / Azure |
+| `NODE_ENV` | (unset) | `production` |
+| `PORT` | `5000` | Leave as-is |
+
+> The backend exits at startup if `NODE_ENV=production` and `JWT_SECRET` is the default value.
+
+### Frontend build-time variable
+
+| Variable | Dev | Docker / K8s |
+|----------|-----|-------------|
+| `VITE_API_URL` | `http://localhost:5000/api` | `/api` (nginx proxies it) |
+
+---
+
+## 3. Kubernetes / kind (local staging)
+
+### Prerequisites
 ```bash
-# Full deploy (creates cluster, installs ingress, builds images, applies manifests)
-bash k8s/deploy.sh
-
-# Open app
-http://localhost:8080
+# kind
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
+chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+# kubectl — https://kubernetes.io/docs/tasks/tools/
 ```
 
-#### Useful k8s scripts
+### Full deploy from scratch
+```bash
+bash k8s/deploy.sh
+# Opens at http://localhost:8080
+```
+
+### Scripts
 
 | Script | What it does |
 |--------|-------------|
-| `k8s/deploy.sh` | Full deploy from scratch |
-| `k8s/redeploy.sh [backend\|frontend]` | Rebuild + reload one or both images |
-| `k8s/start.sh` | Resume pods (after stop, data preserved) |
+| `k8s/deploy.sh` | Create cluster, install ingress, build images, apply manifests |
+| `k8s/redeploy.sh [backend\|frontend]` | Rebuild + rolling-reload one or both services |
+| `k8s/start.sh` | Resume pods after `stop.sh` |
 | `k8s/stop.sh` | Scale all pods to 0 |
-| `k8s/teardown.sh` | Delete kind cluster entirely |
+| `k8s/teardown.sh` | Delete the kind cluster entirely |
 
----
-
-## Environment Variables
-
-### Backend
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `5000` | Express listen port |
-| `DATABASE_URL` | `postgresql://postgres:password@localhost:5432/apnidunia` | PostgreSQL connection string |
-| `JWT_SECRET` | `apnidunia_secret_2024` | JWT signing secret — **change in production** |
-| `DB_SSL` | (unset) | Set `true` to enable SSL for managed DBs |
-| `ALLOWED_ORIGINS` | `http://localhost,http://localhost:5173,...` | Comma-separated CORS origins |
-
-### Frontend (build-time Vite)
-
-| Variable | Dev | Docker/K8s |
-|----------|-----|-----------|
-| `VITE_API_URL` | `http://localhost:5000/api` | `/api` |
-
-### PostgreSQL
-
-| Variable | Value |
-|----------|-------|
-| `POSTGRES_DB` | `apnidunia` |
-| `POSTGRES_USER` | `postgres` |
-| `POSTGRES_PASSWORD` | `apnidunia_pg_2024` |
-
-> **Production**: Move all secrets out of `docker-compose.yml` into a `.env` file (gitignored) or Kubernetes Sealed Secrets.
-
----
-
-## Docker Images
-
-| Image | Base | Purpose |
-|-------|------|---------|
-| `e-shope-backend` | `node:20-alpine` | Express API |
-| `e-shope-frontend` | `nginx:1.27-alpine` | Nginx + React SPA |
-| `postgres:16-alpine` | official | Database |
-
-### Frontend build (multi-stage)
-
-```
-Stage 1 — node:20-alpine
-  VITE_API_URL baked in at build time
-  npm ci → npm run build → dist/
-
-Stage 2 — nginx:1.27-alpine
-  COPY dist/ → /usr/share/nginx/html
-  nginx.conf: SPA fallback, /api proxy, /uploads proxy, gzip
+```bash
+# Manual apply
+kubectl apply -k k8s/
 ```
 
 ---
 
-## Database
+## 4. Production Kubernetes (cloud)
 
-### Schema (auto-created on first start)
+### Build and push images
 
-Defined in `backend/src/config/db.js` → `initDb()`. Uses `CREATE TABLE IF NOT EXISTS` — safe to call on restart.
+```bash
+REGISTRY=ghcr.io/your-org/e-shope  # or ECR / GCR / ACR
+
+docker build -t $REGISTRY/backend:latest ./backend
+docker push $REGISTRY/backend:latest
+
+docker build --build-arg VITE_API_URL=/api \
+  -t $REGISTRY/frontend:latest ./frontend
+docker push $REGISTRY/frontend:latest
+```
+
+Update `k8s/backend-deployment.yaml` and `k8s/frontend-deployment.yaml`:
+```yaml
+image: ghcr.io/your-org/e-shope/backend:latest
+imagePullPolicy: Always
+```
+
+### Manage secrets securely
+
+**Option A — kubectl secret (simplest)**
+```bash
+kubectl create namespace apnidunia --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic postgres-secret \
+  --namespace apnidunia \
+  --from-literal=POSTGRES_DB=apnidunia \
+  --from-literal=POSTGRES_USER=postgres \
+  --from-literal=POSTGRES_PASSWORD=$(openssl rand -hex 32) \
+  --from-literal=JWT_SECRET=$(openssl rand -hex 64) \
+  --from-literal=DATABASE_URL="postgresql://postgres:YOURPASS@postgres-service:5432/apnidunia"
+```
+
+**Option B — Sealed Secrets (GitOps safe)**
+```bash
+helm install sealed-secrets sealed-secrets/sealed-secrets -n kube-system
+kubeseal --format yaml < k8s/postgres-secret.yaml > k8s/sealed-secret.yaml
+# sealed-secret.yaml is safe to commit
+```
+
+**Option C — External Secrets Operator (AWS/GCP/Azure vaults)**
+```bash
+helm install external-secrets external-secrets/external-secrets \
+  -n external-secrets-system --create-namespace
+# Then configure ExternalSecret CRDs pointing at your vault
+```
+
+### Deploy
+```bash
+kubectl apply -k k8s/
+kubectl rollout status deployment/backend  -n apnidunia
+kubectl rollout status deployment/frontend -n apnidunia
+```
+
+### Install nginx ingress controller
+```bash
+helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx --create-namespace \
+  --set controller.service.type=LoadBalancer
+```
+
+### File uploads — use object storage in production
+
+Multer writes to the container filesystem by default (ephemeral). Swap to:
+
+| Cloud | Service | Library |
+|-------|---------|---------|
+| AWS | S3 | `multer-s3` |
+| GCP | Cloud Storage | `@google-cloud/storage` |
+| Azure | Blob Storage | `multer-azure-blob-storage` |
+
+Update `backend/src/routes/uploadRoute.js` with the cloud storage adapter.
+
+---
+
+## 5. Enabling TLS / HTTPS
+
+### Install cert-manager
+```bash
+helm install cert-manager cert-manager/cert-manager \
+  --namespace cert-manager --create-namespace \
+  --set installCRDs=true
+```
+
+### Create ClusterIssuer
+```yaml
+# k8s/cluster-issuer.yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: your@email.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+```
+```bash
+kubectl apply -f k8s/cluster-issuer.yaml
+```
+
+### Uncomment TLS in `k8s/ingress.yaml`
+```yaml
+annotations:
+  cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+tls:
+  - hosts: [apnidunia.com, www.apnidunia.com]
+    secretName: apnidunia-tls
+```
+```bash
+kubectl apply -f k8s/ingress.yaml
+```
+
+---
+
+## 6. SMS OTP Setup
+
+By default, OTP is printed to the backend log. To deliver real SMS to Indian numbers:
+
+1. Sign up free at [fast2sms.com](https://fast2sms.com)
+2. **Dashboard → Dev API** → copy API key
+3. Set `FAST2SMS_API_KEY=your_key` in `.env` (Docker) or K8s secret
+4. Rebuild/redeploy
+
+When key is absent: `docker compose logs backend` shows the OTP.
+
+---
+
+## 7. Database
+
+### Auto-schema (CREATE TABLE IF NOT EXISTS on every start)
 
 Tables: `users`, `products`, `orders`, `order_items`
+Indexes auto-created on: `products.category`, `products.seller_id`, `orders.user_id`, `order_items.order_id`
 
-Indexes automatically created:
-- `idx_products_category`
-- `idx_products_seller_id`
-- `idx_orders_user_id`
-- `idx_order_items_order_id`
-- `idx_order_items_product_id`
-
-### Seed data (auto-seeded if tables empty)
+### Seed data (applied once, if tables are empty)
 
 | Role | Email | Password |
 |------|-------|----------|
@@ -123,96 +256,88 @@ Indexes automatically created:
 | Customer | user@example.com | password123 |
 | Seller | seller@apnidunia.com | seller123 |
 
-21 products across 10 categories are seeded automatically.
+21 products across 10 categories.
 
-### Manual seed restore
-
+### Reset database
 ```bash
-# Docker Compose (mounts automatically)
+# Docker Compose
 docker compose down -v && docker compose up --build -d
 
-# Or apply directly
-psql -U postgres -d apnidunia -f db-seed.sql
+# Kubernetes
+kubectl delete pvc postgres-pvc -n apnidunia
+kubectl apply -f k8s/postgres-pvc.yaml
+kubectl rollout restart deployment/postgres -n apnidunia
 ```
 
----
-
-## Nginx (Frontend)
-
-```nginx
-location /          # SPA fallback → index.html
-location /api/      # proxy_pass → backend-service:5000/api/
-location /uploads/  # proxy_pass → backend-service:5000/uploads/
-gzip on             # JS, CSS, JSON, SVG
-```
-
-Static assets cached for 1 year (`Cache-Control: max-age=31536000, immutable`).
+### External managed database (RDS, Cloud SQL, Azure)
+1. Set `DATABASE_URL` to the full managed DSN
+2. Set `DB_SSL=true`
+3. Remove `postgres-deployment.yaml`, `postgres-service.yaml`, `postgres-pvc.yaml`, `postgres-pv.yaml` from your apply
 
 ---
 
-## Kubernetes Resources
+## 8. CI/CD — GitHub Actions
 
-### Namespace: `apnidunia`
+`.github/workflows/ci.yml` runs on push to `main` / `develop` and on PRs to `main`:
 
-| Resource | Name | Details |
-|----------|------|---------|
-| Deployment | postgres | 1 replica, Recreate strategy |
-| Deployment | backend | 1 replica, initContainer waits for pg |
-| Deployment | frontend | 2 replicas |
-| Service | postgres-service | ClusterIP :5432 |
-| Service | backend-service | ClusterIP :5000 |
-| Service | frontend-service | ClusterIP :80 |
-| Ingress | apnidunia-ingress | `/api` → backend, `/` → frontend |
-| PVC | postgres-pvc | 20Gi, ReadWriteOnce, local-path |
-| ConfigMap | apnidunia-config | PORT=5000 |
-| Secret | postgres-secret | DB creds + JWT_SECRET |
+| Job | Steps |
+|-----|-------|
+| `backend` | `npm ci` → `npm audit --audit-level=high` → check for hardcoded secrets |
+| `frontend` | `npm ci` → `npm run build` → `npm audit` |
+| `docker` | Build both images via Buildx (validates Dockerfiles, no push) |
 
-### Resource limits
+### Enable image publishing to GHCR
 
-| Pod | CPU req/limit | Memory req/limit |
-|-----|--------------|-----------------|
-| postgres | 100m / 500m | 256Mi / 512Mi |
-| backend | 100m / 500m | 128Mi / 512Mi |
-| frontend | 25m / 200m | 32Mi / 128Mi |
-
-### Health probes
-
-| Pod | Readiness | Liveness |
-|-----|-----------|---------|
-| postgres | `pg_isready` (15s init, 5s interval) | `pg_isready` (60s init, 10s interval) |
-| backend | `GET /health` (10s init, 5s interval) | `GET /health` (30s init, 15s interval) |
-| frontend | `GET /` (10s init, 10s interval) | `GET /` (30s init, 20s interval) |
+Uncomment the `publish` job in `.github/workflows/ci.yml`. It uses `GITHUB_TOKEN` automatically — no extra secrets needed.
 
 ---
 
-## After Code Changes
+## 9. After Code Changes
 
 ### Docker Compose
-
 ```bash
 docker compose up --build -d
+# Hard-refresh browser (Ctrl+Shift+R) after frontend changes
 ```
 
 ### Kubernetes
-
 ```bash
 bash k8s/redeploy.sh backend    # backend only
 bash k8s/redeploy.sh frontend   # frontend only
 bash k8s/redeploy.sh            # both
+
+# Or rolling restart after pushing new image
+kubectl rollout restart deployment/backend  -n apnidunia
+kubectl rollout restart deployment/frontend -n apnidunia
 ```
 
 ---
 
-## Production Checklist
+## 10. Production Checklist
 
-- [ ] Set `JWT_SECRET` to a strong random value (not the default)
-- [ ] Set `POSTGRES_PASSWORD` to a strong password
-- [ ] Add `ALLOWED_ORIGINS` to restrict CORS to your domain
-- [ ] Move secrets to `.env` (gitignored) or Kubernetes Sealed Secrets
-- [ ] Replace local-path PVC with a cloud StorageClass (EBS / GCP PD / Azure Disk)
-- [ ] Configure TLS with cert-manager + Let's Encrypt
-- [ ] Integrate a real payment gateway (Razorpay recommended for India)
-- [ ] Replace OTP simulation with Twilio or AWS SNS
-- [ ] Add a `NetworkPolicy` to restrict postgres access to the backend pod only
-- [ ] Push Docker images to a container registry (ECR / GCR / ACR)
-- [ ] Switch JWT storage from localStorage to httpOnly cookies
+### Security
+- [ ] `JWT_SECRET` changed (`openssl rand -hex 64`)
+- [ ] `POSTGRES_PASSWORD` changed from default
+- [ ] `ALLOWED_ORIGINS` set to your domain(s)
+- [ ] `NODE_ENV=production` set
+- [ ] Secrets in `.env` (gitignored) or Sealed Secrets — **not committed to git**
+- [ ] TLS enabled (cert-manager + Let's Encrypt)
+- [ ] Git remote URL does not contain credentials (use SSH or token via env)
+
+### Infrastructure
+- [ ] Images pushed to a registry (GHCR / ECR / GCR / ACR)
+- [ ] `imagePullPolicy: Always` in K8s deployments
+- [ ] PVC StorageClass → cloud-native (EBS / GCP PD / Azure Disk)
+- [ ] Postgres as managed service for HA (RDS / Cloud SQL / Azure DB)
+- [ ] File uploads → S3 / Cloud Storage / Azure Blob
+- [ ] `k8s/network-policy.yaml` applied (postgres ↔ backend only)
+
+### Application
+- [ ] `FAST2SMS_API_KEY` set for real OTP delivery
+- [ ] Real payment gateway integrated (Razorpay for India)
+- [ ] Demo credentials removed or rotated in production seed
+
+### Observability
+- [ ] `morgan combined` logs flowing to a log aggregator
+- [ ] `/health` and `/ready` probes verified in cluster
+- [ ] Pod restart alerts configured

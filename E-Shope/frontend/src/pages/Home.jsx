@@ -89,28 +89,28 @@ const Home = () => {
 
     const pad = (n) => String(n).padStart(2, '0');
 
-    const sectionCard = { background: 'white', borderRadius: '10px', boxShadow: '0 2px 12px rgba(26,63,156,0.08)', overflow: 'hidden', marginBottom: '20px', border: '1px solid #e8ecf4' };
-    const sectionHeader = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(to right, #f8faff, #ffffff)', borderLeft: '4px solid #1a3f9c' };
+    const sectionCard = { background: 'white', borderRadius: '10px', boxShadow: '0 2px 12px rgba(28,25,23,0.07)', overflow: 'hidden', marginBottom: '20px', border: '1px solid #F5F0EA' };
+    const sectionHeader = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #FFF0E4', background: 'linear-gradient(to right, #FFFBF5, #ffffff)', borderLeft: '4px solid #E85D04' };
 
     return (
-        <div style={{ background: '#f0f4f8', minHeight: '100vh' }}>
+        <div style={{ background: '#FAFAF7', minHeight: '100vh' }}>
 
             {/* Hero Carousel */}
-            <div style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, #0d1b3e, #1a3f9c)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+            <div style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, #1C0A00, #3D1A00)', boxShadow: '0 4px 20px rgba(0,0,0,0.25)' }}>
                 <div style={{ position: 'relative', height: '300px' }}>
                     {slides.map((slide, i) => (
                         <div key={i} style={{ position: 'absolute', inset: 0, opacity: i === currentSlide ? 1 : 0, transition: 'opacity 0.8s ease' }}>
                             <img src={slide.image} alt={slide.alt} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(13,27,62,0.55) 0%, transparent 50%)' }} />
+                            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(28,10,0,0.55) 0%, transparent 50%)' }} />
                         </div>
                     ))}
                     <button onClick={() => setCurrentSlide((currentSlide - 1 + slides.length) % slides.length)}
                         style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: '50%', width: '38px', height: '38px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
-                        <ChevronLeft size={20} color="#1a3f9c" />
+                        <ChevronLeft size={20} color="#E85D04" />
                     </button>
                     <button onClick={() => setCurrentSlide((currentSlide + 1) % slides.length)}
                         style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: '50%', width: '38px', height: '38px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
-                        <ChevronRight size={20} color="#1a3f9c" />
+                        <ChevronRight size={20} color="#E85D04" />
                     </button>
                     <div style={{ position: 'absolute', bottom: '14px', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '7px', zIndex: 10 }}>
                         {slides.map((_, i) => (
@@ -129,13 +129,13 @@ const Home = () => {
                     <div style={{ padding: '16px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(5, 1fr)' : isTablet ? 'repeat(5, 1fr)' : 'repeat(10, 1fr)', gap: isMobile ? '6px' : '8px' }}>
                             {categories.map((cat) => (
-                                <Link key={cat.name} to={`/?category=${encodeURIComponent(cat.name)}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '10px 4px', borderRadius: '8px', textDecoration: 'none', cursor: 'pointer', border: activeCategory === cat.name ? '2px solid #1a3f9c' : '2px solid transparent', background: activeCategory === cat.name ? '#f0f4ff' : 'transparent', transition: 'all 0.2s' }}
-                                    onMouseEnter={e => { if (activeCategory !== cat.name) { e.currentTarget.style.background = '#f8faff'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(26,63,156,0.1)'; } }}
+                                <Link key={cat.name} to={`/?category=${encodeURIComponent(cat.name)}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '10px 4px', borderRadius: '8px', textDecoration: 'none', cursor: 'pointer', border: activeCategory === cat.name ? '2px solid #E85D04' : '2px solid transparent', background: activeCategory === cat.name ? '#FFF0E4' : 'transparent', transition: 'all 0.2s' }}
+                                    onMouseEnter={e => { if (activeCategory !== cat.name) { e.currentTarget.style.background = '#FFFBF5'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(232,93,4,0.1)'; } }}
                                     onMouseLeave={e => { if (activeCategory !== cat.name) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.boxShadow = 'none'; } }}>
                                     <div style={{ width: isMobile ? '48px' : '60px', height: isMobile ? '48px' : '60px', borderRadius: '50%', background: cat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: isMobile ? '20px' : '26px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', border: '2px solid rgba(255,255,255,0.8)' }}>
                                         {cat.emoji}
                                     </div>
-                                    <span style={{ fontSize: '11px', fontWeight: 600, color: activeCategory === cat.name ? '#1a3f9c' : '#374151', textAlign: 'center', lineHeight: 1.3 }}>{cat.name}</span>
+                                    <span style={{ fontSize: '11px', fontWeight: 600, color: activeCategory === cat.name ? '#E85D04' : '#44403C', textAlign: 'center', lineHeight: 1.3 }}>{cat.name}</span>
                                 </Link>
                             ))}
                         </div>
@@ -144,21 +144,21 @@ const Home = () => {
 
                 {/* Active Filter/Search Banner */}
                 {(activeCategory || activeSearch) && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', borderRadius: '8px', boxShadow: '0 2px 12px rgba(26,63,156,0.08)', padding: '12px 20px', marginBottom: '20px', border: '1px solid #e8ecf4', borderLeft: '4px solid #1a3f9c' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', borderRadius: '8px', boxShadow: '0 2px 12px rgba(28,25,23,0.07)', padding: '12px 20px', marginBottom: '20px', border: '1px solid #F5F0EA', borderLeft: '4px solid #E85D04' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             {activeSearch && (
-                                <span style={{ fontSize: '14px', color: '#374151' }}>
-                                    🔍 Search results for <strong style={{ color: '#1a3f9c' }}>"{activeSearch}"</strong>
-                                    <span style={{ marginLeft: '8px', fontSize: '12px', color: '#64748b' }}>({products.length} product{products.length !== 1 ? 's' : ''} found)</span>
+                                <span style={{ fontSize: '14px', color: '#44403C' }}>
+                                    🔍 Search results for <strong style={{ color: '#E85D04' }}>"{activeSearch}"</strong>
+                                    <span style={{ marginLeft: '8px', fontSize: '12px', color: '#78716C' }}>({products.length} product{products.length !== 1 ? 's' : ''} found)</span>
                                 </span>
                             )}
                             {activeCategory && !activeSearch && (
-                                <span style={{ fontSize: '14px', color: '#374151' }}>
-                                    Showing results for <strong style={{ color: '#1a3f9c' }}>{activeCategory}</strong>
+                                <span style={{ fontSize: '14px', color: '#44403C' }}>
+                                    Showing results for <strong style={{ color: '#E85D04' }}>{activeCategory}</strong>
                                 </span>
                             )}
                         </div>
-                        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#f0f4ff', border: '1px solid #c7d3f0', borderRadius: '999px', padding: '5px 12px', fontSize: '12px', fontWeight: 600, color: '#1a3f9c', textDecoration: 'none', cursor: 'pointer' }}>
+                        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#FFF5EB', border: '1px solid #FDE0C0', borderRadius: '999px', padding: '5px 12px', fontSize: '12px', fontWeight: 600, color: '#E85D04', textDecoration: 'none', cursor: 'pointer' }}>
                             <X size={12} /> Clear
                         </Link>
                     </div>
@@ -176,14 +176,14 @@ const Home = () => {
                                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                                     {[pad(timeLeft.h), pad(timeLeft.m), pad(timeLeft.s)].map((t, i) => (
                                         <span key={i} style={{ display: 'flex', alignItems: 'center' }}>
-                                            <span style={{ background: 'linear-gradient(135deg, #1a3f9c, #2563eb)', color: 'white', fontSize: '12px', fontWeight: 700, padding: '3px 7px', borderRadius: '5px', boxShadow: '0 2px 6px rgba(26,63,156,0.3)', minWidth: '26px', textAlign: 'center' }}>{t}</span>
+                                            <span style={{ background: 'linear-gradient(135deg, #E85D04, #FB8500)', color: 'white', fontSize: '12px', fontWeight: 700, padding: '3px 7px', borderRadius: '5px', boxShadow: '0 2px 6px rgba(232,93,4,0.3)', minWidth: '26px', textAlign: 'center' }}>{t}</span>
                                             {i < 2 && <span style={{ color: '#f97316', fontWeight: 800, margin: '0 1px', fontSize: '14px' }}>:</span>}
                                         </span>
                                     ))}
                                 </div>
                             </div>
                         </div>
-                        <Link to="/" style={{ color: '#1a3f9c', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#f0f4ff', padding: '5px 12px', borderRadius: '20px', border: '1px solid #c7d3f0' }}>View All</Link>
+                        <Link to="/" style={{ color: '#E85D04', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#FFF5EB', padding: '5px 12px', borderRadius: '20px', border: '1px solid #FDE0C0' }}>View All</Link>
                     </div>
                     <div style={{ padding: '16px' }}>
                         {products.length > 0 ? (
@@ -208,12 +208,12 @@ const Home = () => {
                 <div style={sectionCard}>
                     <div style={sectionHeader}>
                         <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.3px' }}>Best Offers</span>
-                        <Link to="/" style={{ color: '#1a3f9c', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#f0f4ff', padding: '5px 12px', borderRadius: '20px', border: '1px solid #c7d3f0' }}>View All</Link>
+                        <Link to="/" style={{ color: '#E85D04', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#FFF5EB', padding: '5px 12px', borderRadius: '20px', border: '1px solid #FDE0C0' }}>View All</Link>
                     </div>
                     <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '12px' }}>
                         {topOffers.map((offer) => (
                             <Link key={offer.title} to={`/?category=${encodeURIComponent(offer.category)}`} style={{ borderRadius: '10px', overflow: 'hidden', background: offer.bg, textDecoration: 'none', display: 'block', cursor: 'pointer', border: '1px solid rgba(0,0,0,0.06)', transition: 'all 0.22s' }}
-                                onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(26,63,156,0.15)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
+                                onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 24px rgba(232,93,4,0.15)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
                                 onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}>
                                 <img src={offer.image} alt={offer.title} style={{ width: '100%', height: '128px', objectFit: 'cover', display: 'block' }} />
                                 <div style={{ padding: '10px 12px' }}>
@@ -232,7 +232,7 @@ const Home = () => {
                         <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.3px' }}>
                             {activeSearch ? `Results for "${activeSearch}"` : activeCategory ? `${activeCategory} Products` : 'Suggested for You'}
                         </span>
-                        {!activeSearch && <Link to="/" style={{ color: '#1a3f9c', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#f0f4ff', padding: '5px 12px', borderRadius: '20px', border: '1px solid #c7d3f0' }}>View All</Link>}
+                        {!activeSearch && <Link to="/" style={{ color: '#E85D04', fontSize: '12px', fontWeight: 700, textDecoration: 'none', background: '#FFF5EB', padding: '5px 12px', borderRadius: '20px', border: '1px solid #FDE0C0' }}>View All</Link>}
                     </div>
                     <div style={{ padding: '16px' }}>
                         {products.length > 0 ? (
@@ -246,13 +246,13 @@ const Home = () => {
                                 <div style={{ fontSize: '56px', marginBottom: '16px' }}>🔍</div>
                                 <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b', margin: '0 0 8px' }}>No results found for "{activeSearch}"</h3>
                                 <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>Try different keywords, check spelling, or browse categories above</p>
-                                <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #1a3f9c, #2563eb)', color: 'white', padding: '10px 22px', borderRadius: '8px', fontWeight: 700, fontSize: '14px', textDecoration: 'none', boxShadow: '0 4px 12px rgba(26,63,156,0.3)' }}>
+                                <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #E85D04, #FB8500)', color: 'white', padding: '10px 22px', borderRadius: '8px', fontWeight: 700, fontSize: '14px', textDecoration: 'none', boxShadow: '0 4px 12px rgba(232,93,4,0.3)' }}>
                                     ← Browse All Products
                                 </Link>
                             </div>
                         ) : (
                             <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                                <div style={{ display: 'inline-block', width: '40px', height: '40px', border: '4px solid #e0e0e0', borderTopColor: '#2874f0', borderRadius: '50%', marginBottom: '12px' }} />
+                                <div style={{ display: 'inline-block', width: '40px', height: '40px', border: '4px solid #F5F0EA', borderTopColor: '#E85D04', borderRadius: '50%', marginBottom: '12px' }} />
                                 <p style={{ color: '#888', fontSize: '14px' }}>Loading products...</p>
                             </div>
                         )}
@@ -260,7 +260,7 @@ const Home = () => {
                 </div>
 
                 {/* Newsletter */}
-                <div style={{ background: 'linear-gradient(135deg, #0d1b3e 0%, #1a3f9c 60%, #2563eb 100%)', borderRadius: '12px', boxShadow: '0 8px 30px rgba(26,63,156,0.25)', overflow: 'hidden', position: 'relative' }}>
+                <div style={{ background: 'linear-gradient(135deg, #1C0A00 0%, #3D1A00 55%, #5C2A00 100%)', borderRadius: '12px', boxShadow: '0 8px 30px rgba(232,93,4,0.22)', overflow: 'hidden', position: 'relative' }}>
                     <div style={{ position: 'absolute', top: '-40px', right: '-40px', width: '200px', height: '200px', borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
                     <div style={{ position: 'absolute', bottom: '-60px', left: '-30px', width: '250px', height: '250px', borderRadius: '50%', background: 'rgba(255,255,255,0.03)' }} />
                     <div style={{ padding: '40px 24px', textAlign: 'center', position: 'relative', zIndex: 1 }}>

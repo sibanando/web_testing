@@ -38,8 +38,8 @@ export const AuthProvider = ({ children }) => {
 
     const sendOtp = async (phone) => {
         try {
-            await api.post('/auth/send-otp', { phone });
-            return { success: true };
+            const res = await api.post('/auth/send-otp', { phone });
+            return { success: true, via: res.data.via || 'console' };
         } catch (error) {
             return { success: false, message: error.response?.data?.message || 'Failed to send OTP' };
         }

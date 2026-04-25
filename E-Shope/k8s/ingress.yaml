@@ -7,13 +7,29 @@ metadata:
     kubernetes.io/ingress.class: "nginx"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # ── TLS / HTTPS redirect (enable once cert-manager is installed) ──────────
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
 spec:
+  # ── TLS certificates (uncomment after cert-manager + ClusterIssuer are ready)
+  # tls:
+  #   - hosts:
+  #       - apnidunia.com
+  #       - www.apnidunia.com
+  #     secretName: apnidunia-tls
   rules:
-    # Production domain
     - host: apnidunia.com
       http:
         paths:
           - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 5000
+          - path: /uploads
             pathType: Prefix
             backend:
               service:
@@ -27,7 +43,6 @@ spec:
                 name: frontend-service
                 port:
                   number: 80
-    # www redirect
     - host: www.apnidunia.com
       http:
         paths:
@@ -45,10 +60,17 @@ spec:
                 name: frontend-service
                 port:
                   number: 80
-    # Local kind/dev access — no host matches localhost:8080
+    # Local kind / dev — no hostname needed (matches all)
     - http:
         paths:
           - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 5000
+          - path: /uploads
             pathType: Prefix
             backend:
               service:
@@ -62,9 +84,3 @@ spec:
                 name: frontend-service
                 port:
                   number: 80
-  # ── TLS — enable when cert-manager + Let's Encrypt is configured ──────────
-  # tls:
-  #   - hosts:
-  #       - apnidunia.com
-  #       - www.apnidunia.com
-  #     secretName: apnidunia-tls

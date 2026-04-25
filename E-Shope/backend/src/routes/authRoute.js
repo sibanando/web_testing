@@ -2,14 +2,40 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const db = require('../config/db');
 const { verifyToken, JWT_SECRET } = require('../middleware/auth');
 
 // In-memory OTP store: { phone: { otp, expiresAt } }
+// For multi-replica deployments replace with Redis (ioredis + TTL).
 const otpStore = new Map();
 
 function generateOtp() {
-    return String(Math.floor(100000 + Math.random() * 900000));
+    // crypto.randomInt is cryptographically secure — never use Math.random for OTPs
+    return String(crypto.randomInt(100000, 999999));
+}
+
+// Sends OTP via Fast2SMS (free Indian SMS gateway). Returns true on success.
+async function sendVisFast2SMS(phone, otp) {
+    const apiKey = process.env.FAST2SMS_API_KEY;
+    if (!apiKey) return false;
+    try {
+        const res = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+            method: 'POST',
+            headers: { authorization: apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ variables_values: otp, route: 'otp', numbers: phone }),
+        });
+        const data = await res.json();
+        if (data.return === true) {
+            console.log(`[Fast2SMS] OTP dispatched to +91${phone}`);
+            return true;
+        }
+        console.error('[Fast2SMS] Delivery failed:', JSON.stringify(data.message));
+        return false;
+    } catch (err) {
+        console.error('[Fast2SMS] Request error:', err.message);
+        return false;
+    }
 }
 
 function makeToken(user) {
@@ -34,10 +60,15 @@ router.post('/send-otp', async (req, res) => {
         const otp = generateOtp();
         otpStore.set(phone, { otp, expiresAt: Date.now() + 5 * 60 * 1000 });
 
-        // In production, send via SMS gateway (Twilio, AWS SNS, etc.)
-        console.log(`[OTP] ${phone} => ${otp}`);
+        const smsSent = await sendVisFast2SMS(phone, otp);
+        if (!smsSent) {
+            // Fallback: visible in server logs (docker compose logs backend)
+            console.log(`\n==============================`);
+            console.log(`[OTP] +91${phone}  =>  ${otp}`);
+            console.log(`==============================\n`);
+        }
 
-        res.json({ message: 'OTP sent successfully' });
+        res.json({ message: 'OTP sent successfully', via: smsSent ? 'sms' : 'console' });
     } catch (err) {
         console.error('Send OTP error:', err.message);
         res.status(500).json({ message: 'Failed to send OTP' });
