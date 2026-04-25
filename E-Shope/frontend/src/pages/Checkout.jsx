@@ -47,6 +47,7 @@ const Checkout = () => {
     const [failMessage, setFailMessage] = useState('');
     const [verifyProgress, setVerifyProgress] = useState(0);
     const [confirming, setConfirming] = useState(false);
+    const [copied, setCopied] = useState(false);
     const [qrTimeLeft, setQrTimeLeft] = useState(600); // 10 minutes in seconds
     const pollTimer = useRef(null);
     const progressTimer = useRef(null);
@@ -218,9 +219,15 @@ const Checkout = () => {
         setLoading(false);
     };
 
-    // "I've paid" — calls /payment/confirm to trigger bank verification simulation
-    const handlePaymentDone = async () => {
-        if (!paymentId || confirming) return;
+    // Called when user taps a UPI app button — opens the app + triggers bank verification simulation
+    const handleOpenUpiApp = async (appScheme) => {
+        if (!paymentId || !qrData || confirming) return;
+        // Build app-specific deep link or fall back to universal upi://
+        const base = qrData.qrString; // upi://pay?pa=...
+        const deepLink = appScheme ? base.replace('upi://', `${appScheme}://`) : base;
+        // Open UPI app (works on Android/iOS; silently ignored on desktop)
+        window.location.href = deepLink;
+        // Trigger bank verification simulation (equivalent of bank webhook arriving)
         setConfirming(true);
         try {
             const res = await api.post('/payment/confirm', { paymentId });
@@ -229,15 +236,23 @@ const Checkout = () => {
                 setStep('failed');
                 setConfirming(false);
             }
-            // Polling will pick up success/failed once backend finishes verification
+            // Polling handles success/failed automatically
         } catch (err) {
-            const msg = err.response?.data?.message || 'Verification failed. Please try again.';
+            const msg = err.response?.data?.message || 'Could not initiate payment. Please try again.';
             if (err.response?.data?.status === 'expired') {
                 setFailMessage(msg);
                 setStep('failed');
             }
             setConfirming(false);
         }
+    };
+
+    const handleCopyUpiId = () => {
+        if (!qrData?.upiId) return;
+        navigator.clipboard.writeText(qrData.upiId).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
     };
 
     const handleDirectPay = async (payMethod) => {
@@ -540,181 +555,126 @@ const Checkout = () => {
 
                                 {/* Method Detail */}
                                 <div style={{ flex: 1, padding: '16px' }}>
-                                    {method === 'upi-qr' && (
-                                        <div>
-                                            {!qrData ? (
-                                                <div>
-                                                    <p style={{ fontSize: '13px', color: '#444', marginBottom: '12px', fontWeight: 500 }}>Pay using any UPI app — GPay, PhonePe, Paytm, BHIM</p>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', fontSize: '12px', color: '#888' }}>
-                                                        <span>UPI ID:</span>
-                                                        <span style={{ fontFamily: 'monospace', background: '#f5f5f5', padding: '2px 8px', borderRadius: '2px' }}>sibanando.nayak@ybl</span>
-                                                    </div>
-                                                    <div style={{ display: 'flex', gap: '12px', fontSize: '28px', marginBottom: '16px' }}>
-                                                        <span title="Google Pay">🟢</span>
-                                                        <span title="PhonePe">💜</span>
-                                                        <span title="Paytm">💙</span>
-                                                        <span title="BHIM">🇮🇳</span>
-                                                    </div>
-                                                    <button
-                                                        onClick={handleGetQR}
-                                                        disabled={loading}
-                                                        style={{ padding: '10px 24px', fontWeight: 700, fontSize: '13px', borderRadius: '2px', background: '#ff9f00', color: 'white', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-                                                    >
-                                                        {loading ? <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> : '📲'}
-                                                        {loading ? 'Generating...' : 'Generate QR Code'}
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div style={{ textAlign: 'center' }}>
-                                                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#444', marginBottom: '12px' }}>
-                                                        Scan with any UPI app to pay <span style={{ fontWeight: 700, color: '#2874f0' }}>₹{finalTotal.toLocaleString('en-IN')}</span>
-                                                    </p>
-                                                    <div style={{ display: 'inline-block', padding: '12px', border: '2px solid #90caf9', borderRadius: '4px', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', marginBottom: '12px' }}>
-                                                        <QRCode value={qrData.qrString} size={200} />
-                                                    </div>
-                                                    <p style={{ fontSize: '12px', color: '#888', marginBottom: '4px' }}>UPI ID: <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{qrData.upiId}</span></p>
-                                                    <p style={{ fontSize: '12px', color: qrTimeLeft < 60 ? '#d32f2f' : '#e65100', marginBottom: '16px', fontWeight: qrTimeLeft < 60 ? 700 : 400 }}>
-                                                        ⏱ QR expires in {Math.floor(qrTimeLeft / 60)}:{String(qrTimeLeft % 60).padStart(2, '0')}
-                                                    </p>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 0', marginBottom: '8px', color: '#2874f0', fontSize: '13px', fontWeight: 600 }}>
-                                                        <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                                        Waiting for payment...
-                                                    </div>
-                                                    {confirming ? (
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '8px 0', color: '#388e3c', fontSize: '13px', fontWeight: 600 }}>
-                                                            <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} />
-                                                            Verifying with bank...
+                                    {/* ── Unified QR / UPI payment panel ── */}
+                                    {['upi-qr', 'phonepe', 'gpay'].includes(method) && (() => {
+                                        const upiApps = [
+                                            { label: 'GPay', emoji: '🟢', scheme: 'tez', color: '#1a73e8' },
+                                            { label: 'PhonePe', emoji: '💜', scheme: 'phonepe', color: '#5f259f' },
+                                            { label: 'Paytm', emoji: '💙', scheme: 'paytmmp', color: '#00BAF2' },
+                                            { label: 'BHIM', emoji: '🇮🇳', scheme: null, color: '#138808' },
+                                        ];
+                                        return (
+                                            <div>
+                                                {!qrData ? (
+                                                    /* ── Before QR is generated ── */
+                                                    <div>
+                                                        <p style={{ fontSize: '13px', color: '#444', marginBottom: '10px', fontWeight: 500 }}>
+                                                            Pay ₹{finalTotal.toLocaleString('en-IN')} securely using any UPI app
+                                                        </p>
+                                                        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                                                            {upiApps.map(app => (
+                                                                <div key={app.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', border: '1px solid #e0e0e0', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>{app.emoji}</div>
+                                                                    <span style={{ fontSize: '10px', color: '#888', fontWeight: 500 }}>{app.label}</span>
+                                                                </div>
+                                                            ))}
                                                         </div>
-                                                    ) : (
-                                                        <button
-                                                            onClick={handlePaymentDone}
-                                                            style={{ padding: '8px 24px', fontSize: '12px', borderRadius: '2px', background: 'transparent', color: '#888', border: '1px solid #ddd', cursor: 'pointer' }}
-                                                        >
-                                                            I've already paid
+                                                        <button onClick={handleGetQR} disabled={loading}
+                                                            style={{ padding: '10px 24px', fontWeight: 700, fontSize: '13px', borderRadius: '2px', background: '#ff9f00', color: 'white', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            {loading ? <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> : '📲'}
+                                                            {loading ? 'Generating...' : 'Proceed to Pay'}
                                                         </button>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                                    </div>
+                                                ) : confirming ? (
+                                                    /* ── User tapped a UPI app — waiting for bank ── */
+                                                    <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                                                        <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                                                            <Loader size={30} style={{ color: '#388e3c', animation: 'spin 1s linear infinite' }} />
+                                                        </div>
+                                                        <p style={{ fontSize: '15px', fontWeight: 700, color: '#212121', margin: '0 0 6px' }}>Waiting for payment</p>
+                                                        <p style={{ fontSize: '12px', color: '#888', margin: '0 0 20px', lineHeight: 1.5 }}>
+                                                            Complete the payment in your UPI app.<br />
+                                                            This page will update automatically.
+                                                        </p>
+                                                        <div style={{ background: '#f5f5f5', borderRadius: '4px', height: '4px', overflow: 'hidden', marginBottom: '20px', maxWidth: '260px', margin: '0 auto 20px' }}>
+                                                            <div style={{ height: '100%', background: 'linear-gradient(90deg, #388e3c, #66bb6a)', borderRadius: '4px', animation: 'progress 10s linear forwards' }} />
+                                                        </div>
+                                                        <button onClick={() => { setConfirming(false); setQrData(null); setPaymentId(null); setStep('form'); }}
+                                                            style={{ fontSize: '12px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                                                            Cancel &amp; use different method
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    /* ── QR shown, waiting for user to scan or tap app ── */
+                                                    <div>
+                                                        {/* QR code + meta */}
+                                                        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap' }}>
+                                                            <div style={{ display: 'inline-block', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '4px', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', flexShrink: 0 }}>
+                                                                <QRCode value={qrData.qrString} size={160} />
+                                                            </div>
+                                                            <div style={{ flex: 1, minWidth: '180px' }}>
+                                                                <p style={{ fontSize: '13px', fontWeight: 700, color: '#212121', margin: '0 0 4px' }}>
+                                                                    Pay ₹{parseFloat(qrData.amount).toLocaleString('en-IN')}
+                                                                </p>
+                                                                <p style={{ fontSize: '12px', color: '#888', margin: '0 0 12px' }}>Scan QR with any UPI app</p>
 
-                                    {method === 'phonepe' && (
-                                        <div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#5f259f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>💜</div>
-                                                <div>
-                                                    <p style={{ fontWeight: 600, color: '#212121', margin: '0 0 2px', fontSize: '14px' }}>PhonePe UPI</p>
-                                                    <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>Fast & secure payments</p>
-                                                </div>
-                                            </div>
-                                            {!qrData ? (
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', fontSize: '12px', color: '#888' }}>
-                                                        <span>UPI ID:</span>
-                                                        <span style={{ fontFamily: 'monospace', background: '#f5f5f5', padding: '2px 8px', borderRadius: '2px' }}>sibanando.nayak@ybl</span>
-                                                    </div>
-                                                    <p style={{ fontSize: '12px', color: '#555', marginBottom: '12px' }}>Scan QR with PhonePe to pay <strong>₹{finalTotal.toLocaleString('en-IN')}</strong></p>
-                                                    <button
-                                                        onClick={handleGetQR}
-                                                        disabled={loading}
-                                                        style={{ padding: '10px 24px', fontWeight: 700, fontSize: '13px', borderRadius: '2px', background: '#5f259f', color: 'white', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-                                                    >
-                                                        {loading ? <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> : '📲'}
-                                                        {loading ? 'Generating...' : 'Generate QR Code'}
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div style={{ textAlign: 'center' }}>
-                                                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#444', marginBottom: '12px' }}>
-                                                        Scan with PhonePe to pay <span style={{ fontWeight: 700, color: '#5f259f' }}>₹{finalTotal.toLocaleString('en-IN')}</span>
-                                                    </p>
-                                                    <div style={{ display: 'inline-block', padding: '12px', border: '2px solid #ce93d8', borderRadius: '4px', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', marginBottom: '12px' }}>
-                                                        <QRCode value={qrData.qrString} size={180} />
-                                                    </div>
-                                                    <p style={{ fontSize: '12px', color: '#888', marginBottom: '4px' }}>UPI ID: <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{qrData.upiId}</span></p>
-                                                    <p style={{ fontSize: '12px', color: qrTimeLeft < 60 ? '#d32f2f' : '#e65100', marginBottom: '16px', fontWeight: qrTimeLeft < 60 ? 700 : 400 }}>
-                                                        ⏱ QR expires in {Math.floor(qrTimeLeft / 60)}:{String(qrTimeLeft % 60).padStart(2, '0')}
-                                                    </p>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 0', marginBottom: '8px', color: '#2874f0', fontSize: '13px', fontWeight: 600 }}>
-                                                        <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                                        Waiting for payment...
-                                                    </div>
-                                                    {confirming ? (
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '8px 0', color: '#388e3c', fontSize: '13px', fontWeight: 600 }}>
-                                                            <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} />
-                                                            Verifying with bank...
-                                                        </div>
-                                                    ) : (
-                                                        <button
-                                                            onClick={handlePaymentDone}
-                                                            style={{ padding: '8px 24px', fontSize: '12px', borderRadius: '2px', background: 'transparent', color: '#888', border: '1px solid #ddd', cursor: 'pointer' }}
-                                                        >
-                                                            I've already paid
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                                                {/* UPI ID with copy */}
+                                                                <p style={{ fontSize: '11px', color: '#888', margin: '0 0 4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>UPI ID</p>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                                                                    <span style={{ fontFamily: 'monospace', fontSize: '12px', background: '#f5f5f5', padding: '4px 8px', borderRadius: '2px', color: '#333' }}>{qrData.upiId}</span>
+                                                                    <button onClick={handleCopyUpiId}
+                                                                        style={{ padding: '4px 10px', fontSize: '11px', fontWeight: 700, background: copied ? '#e8f5e9' : '#e8f0fe', color: copied ? '#388e3c' : '#2874f0', border: 'none', borderRadius: '2px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                                                        {copied ? '✓ Copied' : 'Copy'}
+                                                                    </button>
+                                                                </div>
 
-                                    {method === 'gpay' && (
-                                        <div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'white', border: '1px solid #e0e0e0', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>🟢</div>
-                                                <div>
-                                                    <p style={{ fontWeight: 600, color: '#212121', margin: '0 0 2px', fontSize: '14px' }}>Google Pay</p>
-                                                    <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>Simple & secure UPI payments</p>
-                                                </div>
-                                            </div>
-                                            {!qrData ? (
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', fontSize: '12px', color: '#888' }}>
-                                                        <span>UPI ID:</span>
-                                                        <span style={{ fontFamily: 'monospace', background: '#f5f5f5', padding: '2px 8px', borderRadius: '2px' }}>sibanando.nayak@ybl</span>
-                                                    </div>
-                                                    <p style={{ fontSize: '12px', color: '#555', marginBottom: '12px' }}>Scan QR with Google Pay to pay <strong>₹{finalTotal.toLocaleString('en-IN')}</strong></p>
-                                                    <button
-                                                        onClick={handleGetQR}
-                                                        disabled={loading}
-                                                        style={{ padding: '10px 24px', fontWeight: 700, fontSize: '13px', borderRadius: '2px', background: '#1a73e8', color: 'white', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-                                                    >
-                                                        {loading ? <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> : '📲'}
-                                                        {loading ? 'Generating...' : 'Generate QR Code'}
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div style={{ textAlign: 'center' }}>
-                                                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#444', marginBottom: '12px' }}>
-                                                        Scan with Google Pay to pay <span style={{ fontWeight: 700, color: '#1a73e8' }}>₹{finalTotal.toLocaleString('en-IN')}</span>
-                                                    </p>
-                                                    <div style={{ display: 'inline-block', padding: '12px', border: '2px solid #90caf9', borderRadius: '4px', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', marginBottom: '12px' }}>
-                                                        <QRCode value={qrData.qrString} size={180} />
-                                                    </div>
-                                                    <p style={{ fontSize: '12px', color: '#888', marginBottom: '4px' }}>UPI ID: <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{qrData.upiId}</span></p>
-                                                    <p style={{ fontSize: '12px', color: qrTimeLeft < 60 ? '#d32f2f' : '#e65100', marginBottom: '16px', fontWeight: qrTimeLeft < 60 ? 700 : 400 }}>
-                                                        ⏱ QR expires in {Math.floor(qrTimeLeft / 60)}:{String(qrTimeLeft % 60).padStart(2, '0')}
-                                                    </p>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px 0', marginBottom: '8px', color: '#2874f0', fontSize: '13px', fontWeight: 600 }}>
-                                                        <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                                        Waiting for payment...
-                                                    </div>
-                                                    {confirming ? (
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '8px 0', color: '#388e3c', fontSize: '13px', fontWeight: 600 }}>
-                                                            <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} />
-                                                            Verifying with bank...
+                                                                {/* Timer */}
+                                                                <p style={{ fontSize: '12px', color: qrTimeLeft < 60 ? '#d32f2f' : '#e65100', fontWeight: qrTimeLeft < 60 ? 700 : 500, margin: '0 0 12px' }}>
+                                                                    ⏱ Expires in {Math.floor(qrTimeLeft / 60)}:{String(qrTimeLeft % 60).padStart(2, '0')}
+                                                                </p>
+
+                                                                {/* Auto-detect indicator */}
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#2874f0', fontWeight: 500 }}>
+                                                                    <Loader size={13} style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+                                                                    Waiting for payment…
+                                                                </div>
+                                                                <p style={{ fontSize: '11px', color: '#aaa', margin: '3px 0 0' }}>Page updates automatically</p>
+                                                            </div>
                                                         </div>
-                                                    ) : (
-                                                        <button
-                                                            onClick={handlePaymentDone}
-                                                            style={{ padding: '8px 24px', fontSize: '12px', borderRadius: '2px', background: 'transparent', color: '#888', border: '1px solid #ddd', cursor: 'pointer' }}
-                                                        >
-                                                            I've already paid
+
+                                                        {/* Divider */}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '12px 0' }}>
+                                                            <div style={{ flex: 1, height: '1px', background: '#e0e0e0' }} />
+                                                            <span style={{ fontSize: '11px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' }}>OR PAY USING APP</span>
+                                                            <div style={{ flex: 1, height: '1px', background: '#e0e0e0' }} />
+                                                        </div>
+
+                                                        {/* UPI app buttons */}
+                                                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                                                            {upiApps.map(app => (
+                                                                <button key={app.label} onClick={() => handleOpenUpiApp(app.scheme)}
+                                                                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', padding: '10px 14px', background: 'white', border: `1.5px solid ${app.color}22`, borderRadius: '8px', cursor: 'pointer', minWidth: '64px', transition: 'all 0.15s', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+                                                                    onMouseEnter={e => { e.currentTarget.style.borderColor = app.color; e.currentTarget.style.background = `${app.color}08`; }}
+                                                                    onMouseLeave={e => { e.currentTarget.style.borderColor = `${app.color}22`; e.currentTarget.style.background = 'white'; }}>
+                                                                    <span style={{ fontSize: '22px', lineHeight: 1 }}>{app.emoji}</span>
+                                                                    <span style={{ fontSize: '10px', fontWeight: 700, color: app.color, whiteSpace: 'nowrap' }}>{app.label}</span>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <p style={{ fontSize: '11px', color: '#aaa', margin: '0 0 12px' }}>
+                                                            Tap an app to open it with payment pre-filled
+                                                        </p>
+
+                                                        {/* Cancel */}
+                                                        <button onClick={() => { setQrData(null); setPaymentId(null); setStep('form'); setConfirming(false); }}
+                                                            style={{ fontSize: '12px', color: '#888', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+                                                            Cancel &amp; use different method
                                                         </button>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>

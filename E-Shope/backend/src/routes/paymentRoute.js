@@ -53,17 +53,17 @@ router.post('/confirm', verifyToken, (req, res) => {
         return res.json({ status: session.status, message: 'Verification already in progress' });
     }
 
-    // Move to processing — simulate bank verification (3-5s)
+    // Move to processing — simulate bank webhook arriving after user completes payment in app (8-14s)
     session.status = 'processing';
     session.transactionId = `TXN${Date.now()}`;
 
-    const delay = 3000 + Math.floor(Math.random() * 2000);
-    const willFail = Math.random() < 0.1; // 10% realistic failure rate
+    const delay = 8000 + Math.floor(Math.random() * 6000);
+    const willFail = Math.random() < 0.1;
     setTimeout(() => {
         if (session.status === 'processing') {
             if (willFail) {
                 session.status = 'failed';
-                session.message = 'Payment could not be verified. If money was debited, it will be refunded in 24 hours.';
+                session.message = 'Payment declined by bank. No amount was debited.';
             } else {
                 session.status = 'success';
                 session.verifiedAt = new Date().toISOString();
@@ -71,7 +71,7 @@ router.post('/confirm', verifyToken, (req, res) => {
         }
     }, delay);
 
-    res.json({ status: 'processing', message: 'Verifying payment with bank...' });
+    res.json({ status: 'processing', message: 'Waiting for bank confirmation...' });
 });
 
 // GET /api/payment/status/:paymentId  — poll payment status
