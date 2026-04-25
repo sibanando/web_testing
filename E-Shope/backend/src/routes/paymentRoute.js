@@ -16,7 +16,7 @@ router.post('/upi-qr', verifyToken, (req, res) => {
     const transactionNote = `Order payment of Rs ${amount}`;
     const qrString = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
 
-    // Store payment session — status goes pending → processing → success
+    // Store payment session — stays pending until user confirms via /payment/confirm
     paymentSessions.set(paymentId, {
         amount,
         status: 'pending',
@@ -25,31 +25,14 @@ router.post('/upi-qr', verifyToken, (req, res) => {
         transactionId: `TXN${Date.now()}`,
     });
 
-    // Demo: simulate payment being received after 8-15s (as if user scanned & paid)
-    // ~20% chance of failure to test both paths
-    const willFail = Math.random() < 0.2;
-    const scanDelay = 8000 + Math.floor(Math.random() * 7000);
+    // Auto-expire after 10 minutes — never auto-succeed
     setTimeout(() => {
         const session = paymentSessions.get(paymentId);
         if (session && session.status === 'pending') {
-            session.status = 'processing';
-            // Bank verification takes another 2-3s
-            setTimeout(() => {
-                if (session.status === 'processing') {
-                    if (willFail) {
-                        session.status = 'failed';
-                        session.message = 'Payment declined by bank. Please try again.';
-                    } else {
-                        session.status = 'success';
-                        session.verifiedAt = new Date().toISOString();
-                    }
-                }
-            }, 2000 + Math.floor(Math.random() * 1000));
+            session.status = 'expired';
         }
-    }, scanDelay);
-
-    // Auto-expire after 10 minutes
-    setTimeout(() => paymentSessions.delete(paymentId), 10 * 60 * 1000);
+        setTimeout(() => paymentSessions.delete(paymentId), 60000);
+    }, 10 * 60 * 1000);
 
     res.json({
         qrString,
@@ -60,22 +43,31 @@ router.post('/upi-qr', verifyToken, (req, res) => {
     });
 });
 
-// POST /api/payment/confirm  — user clicks "I've Paid", start verification
+// POST /api/payment/confirm  — user clicks "I've Paid", start bank verification
 router.post('/confirm', verifyToken, (req, res) => {
     const { paymentId } = req.body;
     const session = paymentSessions.get(paymentId);
     if (!session) return res.status(404).json({ status: 'expired', message: 'Payment session expired or not found' });
+    if (session.status === 'expired') return res.status(400).json({ status: 'expired', message: 'QR code has expired. Please generate a new one.' });
+    if (session.status === 'processing' || session.status === 'success') {
+        return res.json({ status: session.status, message: 'Verification already in progress' });
+    }
 
-    // Move to processing state — simulate bank verification taking a few seconds
+    // Move to processing — simulate bank verification (3-5s)
     session.status = 'processing';
     session.transactionId = `TXN${Date.now()}`;
 
-    // Simulate async bank verification (2-4s delay, then success)
-    const delay = 2000 + Math.floor(Math.random() * 2000);
+    const delay = 3000 + Math.floor(Math.random() * 2000);
+    const willFail = Math.random() < 0.1; // 10% realistic failure rate
     setTimeout(() => {
         if (session.status === 'processing') {
-            session.status = 'success';
-            session.verifiedAt = new Date().toISOString();
+            if (willFail) {
+                session.status = 'failed';
+                session.message = 'Payment could not be verified. If money was debited, it will be refunded in 24 hours.';
+            } else {
+                session.status = 'success';
+                session.verifiedAt = new Date().toISOString();
+            }
         }
     }, delay);
 
@@ -86,7 +78,10 @@ router.post('/confirm', verifyToken, (req, res) => {
 router.get('/status/:paymentId', verifyToken, (req, res) => {
     const session = paymentSessions.get(req.params.paymentId);
     if (!session) {
-        return res.json({ status: 'expired', message: 'Payment session expired' });
+        return res.json({ status: 'expired', message: 'Payment session not found or expired' });
+    }
+    if (session.status === 'expired') {
+        return res.json({ status: 'expired', message: 'QR code expired. Please generate a new one.' });
     }
 
     const response = {

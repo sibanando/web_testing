@@ -46,6 +46,7 @@ const Checkout = () => {
     const [paymentId, setPaymentId] = useState(null);
     const [failMessage, setFailMessage] = useState('');
     const [verifyProgress, setVerifyProgress] = useState(0);
+    const [confirming, setConfirming] = useState(false);
     const [qrTimeLeft, setQrTimeLeft] = useState(600); // 10 minutes in seconds
     const pollTimer = useRef(null);
     const progressTimer = useRef(null);
@@ -153,7 +154,7 @@ const Checkout = () => {
         return () => { if (countdownTimer.current) clearInterval(countdownTimer.current); };
     }, [step]);
 
-    // Auto-poll payment status on QR screen — wait for success, then go straight to Order Confirmed
+    // Poll payment status while QR is shown — only acts on success/failed/expired
     useEffect(() => {
         if (step !== 'qr' || !paymentId) return;
 
@@ -166,16 +167,14 @@ const Checkout = () => {
                 if (status === 'success') {
                     clearInterval(pollTimer.current);
                     clearInterval(countdownTimer.current);
-                    // Payment confirmed — create order and go to success
                     try {
                         const orderRes = await api.post('/orders', {
                             userId: user?.id,
                             total: finalTotal,
                             items: items.map(i => ({ id: i.id, quantity: i.quantity, price: i.price })),
-                            address,
-                            phone,
+                            address, phone,
                             paymentMethod: 'UPI',
-                            transactionId: txnId
+                            transactionId: txnId,
                         });
                         setOrderId(orderRes.data.orderId);
                         clearCart();
@@ -187,7 +186,14 @@ const Checkout = () => {
                 } else if (status === 'failed') {
                     clearInterval(pollTimer.current);
                     clearInterval(countdownTimer.current);
+                    setConfirming(false);
                     setFailMessage(statusRes.data.message || 'Payment failed. Please try again.');
+                    setStep('failed');
+                } else if (status === 'expired') {
+                    clearInterval(pollTimer.current);
+                    clearInterval(countdownTimer.current);
+                    setConfirming(false);
+                    setFailMessage('QR code expired. Please generate a new one.');
                     setStep('failed');
                 }
             } catch { /* network error — keep polling */ }
@@ -204,6 +210,7 @@ const Checkout = () => {
             const res = await api.post('/payment/upi-qr', { amount: finalTotal });
             setQrData(res.data);
             setPaymentId(res.data.paymentId);
+            setConfirming(false);
             setStep('qr');
         } catch (err) {
             alert('Could not generate QR. Please try again.');
@@ -211,33 +218,26 @@ const Checkout = () => {
         setLoading(false);
     };
 
-    // Manual "I've already paid" — speeds up poll by triggering an immediate check
+    // "I've paid" — calls /payment/confirm to trigger bank verification simulation
     const handlePaymentDone = async () => {
-        if (!paymentId) return;
+        if (!paymentId || confirming) return;
+        setConfirming(true);
         try {
-            const statusRes = await api.get(`/payment/status/${paymentId}`);
-            const { status, transactionId: txnId } = statusRes.data;
-            if (status === 'success') {
-                clearInterval(pollTimer.current);
-                clearInterval(countdownTimer.current);
-                try {
-                    const orderRes = await api.post('/orders', {
-                        userId: user?.id,
-                        total: finalTotal,
-                        items: items.map(i => ({ id: i.id, quantity: i.quantity, price: i.price })),
-                        address, phone,
-                        paymentMethod: 'UPI',
-                        transactionId: txnId
-                    });
-                    setOrderId(orderRes.data.orderId);
-                    clearCart();
-                    setStep('success');
-                } catch {
-                    setFailMessage('Payment received but order creation failed. Please contact support.');
-                    setStep('failed');
-                }
+            const res = await api.post('/payment/confirm', { paymentId });
+            if (res.data.status === 'expired') {
+                setFailMessage('QR code expired. Please generate a new one.');
+                setStep('failed');
+                setConfirming(false);
             }
-        } catch { /* network error — polling will continue */ }
+            // Polling will pick up success/failed once backend finishes verification
+        } catch (err) {
+            const msg = err.response?.data?.message || 'Verification failed. Please try again.';
+            if (err.response?.data?.status === 'expired') {
+                setFailMessage(msg);
+                setStep('failed');
+            }
+            setConfirming(false);
+        }
     };
 
     const handleDirectPay = async (payMethod) => {
@@ -580,12 +580,19 @@ const Checkout = () => {
                                                         <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
                                                         Waiting for payment...
                                                     </div>
-                                                    <button
-                                                        onClick={handlePaymentDone}
-                                                        style={{ padding: '8px 24px', fontSize: '12px', borderRadius: '2px', background: 'transparent', color: '#888', border: '1px solid #ddd', cursor: 'pointer' }}
-                                                    >
-                                                        I've already paid
-                                                    </button>
+                                                    {confirming ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '8px 0', color: '#388e3c', fontSize: '13px', fontWeight: 600 }}>
+                                                            <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} />
+                                                            Verifying with bank...
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            onClick={handlePaymentDone}
+                                                            style={{ padding: '8px 24px', fontSize: '12px', borderRadius: '2px', background: 'transparent', color: '#888', border: '1px solid #ddd', cursor: 'pointer' }}
+                                                        >
+                                                            I've already paid
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -632,12 +639,19 @@ const Checkout = () => {
                                                         <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
                                                         Waiting for payment...
                                                     </div>
-                                                    <button
-                                                        onClick={handlePaymentDone}
-                                                        style={{ padding: '8px 24px', fontSize: '12px', borderRadius: '2px', background: 'transparent', color: '#888', border: '1px solid #ddd', cursor: 'pointer' }}
-                                                    >
-                                                        I've already paid
-                                                    </button>
+                                                    {confirming ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '8px 0', color: '#388e3c', fontSize: '13px', fontWeight: 600 }}>
+                                                            <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} />
+                                                            Verifying with bank...
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            onClick={handlePaymentDone}
+                                                            style={{ padding: '8px 24px', fontSize: '12px', borderRadius: '2px', background: 'transparent', color: '#888', border: '1px solid #ddd', cursor: 'pointer' }}
+                                                        >
+                                                            I've already paid
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -684,12 +698,19 @@ const Checkout = () => {
                                                         <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
                                                         Waiting for payment...
                                                     </div>
-                                                    <button
-                                                        onClick={handlePaymentDone}
-                                                        style={{ padding: '8px 24px', fontSize: '12px', borderRadius: '2px', background: 'transparent', color: '#888', border: '1px solid #ddd', cursor: 'pointer' }}
-                                                    >
-                                                        I've already paid
-                                                    </button>
+                                                    {confirming ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '8px 0', color: '#388e3c', fontSize: '13px', fontWeight: 600 }}>
+                                                            <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} />
+                                                            Verifying with bank...
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            onClick={handlePaymentDone}
+                                                            style={{ padding: '8px 24px', fontSize: '12px', borderRadius: '2px', background: 'transparent', color: '#888', border: '1px solid #ddd', cursor: 'pointer' }}
+                                                        >
+                                                            I've already paid
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
