@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { Star, ShoppingCart, Check } from 'lucide-react';
 
 const ProductCard = ({ product, compact = false }) => {
     const { addToCart } = useCart();
+    const { user } = useAuth();
     const [adding, setAdding] = useState(false);
     const [showAddedMsg, setShowAddedMsg] = useState(false);
+
+    const isShopRole = user?.is_admin === 1 || user?.is_seller === 1;
 
     const handleAdd = (e) => {
         e.stopPropagation();
@@ -121,11 +125,17 @@ const ProductCard = ({ product, compact = false }) => {
 
                 <p style={{ fontSize: '11px', color: '#059669', fontWeight: 600, marginBottom: '10px' }}>✦ Free Delivery</p>
 
-                <button onClick={handleAdd} disabled={adding}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '9px', fontSize: '13px', fontWeight: 600, borderRadius: '6px', border: 'none', cursor: adding ? 'default' : 'pointer', background: adding ? 'linear-gradient(135deg, #059669, #10b981)' : 'linear-gradient(135deg, #E85D04, #FB8500)', color: 'white', boxShadow: adding ? '0 4px 12px rgba(5,150,105,0.3)' : '0 4px 12px rgba(232,93,4,0.3)', transition: 'all 0.2s' }}>
-                    {adding ? <Check size={15} /> : <ShoppingCart size={15} />}
-                    {adding ? 'Added!' : 'Add to Cart'}
-                </button>
+                {isShopRole ? (
+                    <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '9px', fontSize: '12px', fontWeight: 600, borderRadius: '6px', border: '1px solid rgba(232,93,4,0.25)', color: '#E85D04', background: '#FFF5EB' }}>
+                        View Details
+                    </div>
+                ) : (
+                    <button onClick={handleAdd} disabled={adding}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '9px', fontSize: '13px', fontWeight: 600, borderRadius: '6px', border: 'none', cursor: adding ? 'default' : 'pointer', background: adding ? 'linear-gradient(135deg, #059669, #10b981)' : 'linear-gradient(135deg, #E85D04, #FB8500)', color: 'white', boxShadow: adding ? '0 4px 12px rgba(5,150,105,0.3)' : '0 4px 12px rgba(232,93,4,0.3)', transition: 'all 0.2s' }}>
+                        {adding ? <Check size={15} /> : <ShoppingCart size={15} />}
+                        {adding ? 'Added!' : 'Add to Cart'}
+                    </button>
+                )}
             </div>
         </Link>
     );

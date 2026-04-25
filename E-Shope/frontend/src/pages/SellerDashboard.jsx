@@ -5,7 +5,8 @@ import api from '../services/api';
 import {
     Store, Package, Plus, Pencil, Trash2, X,
     BarChart2, ShoppingBag, TrendingUp, LogOut,
-    Home, User, Eye, EyeOff, CheckCircle, Search, AlertTriangle
+    Home, User, Eye, EyeOff, CheckCircle, Search, AlertTriangle,
+    ClipboardList
 } from 'lucide-react';
 
 const inputStyle = {
@@ -86,6 +87,9 @@ const SellerDashboard = () => {
     const [stats, setStats] = useState({ totalProducts: 0, totalOrders: 0, revenue: 0 });
     const [productSearch, setProductSearch] = useState('');
 
+    const [orders, setOrders] = useState([]);
+    const [ordersLoading, setOrdersLoading] = useState(false);
+
     const [newProduct, setNewProduct] = useState({ name: '', price: '', description: '', category: 'Electronics', image: '', discount: 0, stock: 100 });
     const [addLoading, setAddLoading] = useState(false);
     const [addSuccess, setAddSuccess] = useState(false);
@@ -106,6 +110,7 @@ const SellerDashboard = () => {
         if (!user.is_seller && !user.is_admin) { navigate('/'); return; }
         fetchProducts();
         fetchStats();
+        fetchOrders();
     }, [user]);
 
     const authHeader = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
@@ -128,6 +133,18 @@ const SellerDashboard = () => {
             setStats(res.data);
         } catch (err) {
             console.error('Fetch stats error:', err);
+        }
+    };
+
+    const fetchOrders = async () => {
+        setOrdersLoading(true);
+        try {
+            const res = await api.get('/seller/orders', authHeader());
+            setOrders(Array.isArray(res.data) ? res.data : []);
+        } catch (err) {
+            console.error('Fetch orders error:', err);
+        } finally {
+            setOrdersLoading(false);
         }
     };
 
@@ -233,6 +250,7 @@ const SellerDashboard = () => {
     const sidebarTabs = [
         { id: 'dashboard', label: 'Dashboard', icon: <BarChart2 size={16} /> },
         { id: 'my-products', label: 'My Products', icon: <Package size={16} />, count: products.length },
+        { id: 'orders', label: 'My Orders', icon: <ClipboardList size={16} />, count: orders.length },
         { id: 'add-product', label: 'Add Product', icon: <Plus size={16} /> },
         { id: 'profile', label: 'Profile', icon: <User size={16} /> },
     ];
@@ -403,12 +421,14 @@ const SellerDashboard = () => {
                         <h1 style={{ fontSize: '18px', fontWeight: 800, color: '#111827', margin: 0, letterSpacing: '-0.3px' }}>
                             {activeTab === 'dashboard' && 'Overview'}
                             {activeTab === 'my-products' && 'My Products'}
+                            {activeTab === 'orders' && 'My Orders'}
                             {activeTab === 'add-product' && 'List New Product'}
                             {activeTab === 'profile' && 'Profile & Security'}
                         </h1>
                         <p style={{ fontSize: '12px', color: '#6b7280', margin: '1px 0 0' }}>
                             {activeTab === 'dashboard' && `${products.length} products · ₹${parseFloat(stats.revenue || 0).toLocaleString('en-IN')} revenue`}
                             {activeTab === 'my-products' && `${filteredProducts.length} of ${products.length} products`}
+                            {activeTab === 'orders' && `${orders.length} order${orders.length !== 1 ? 's' : ''} received`}
                             {activeTab === 'add-product' && 'Fill in the details to list a product'}
                             {activeTab === 'profile' && user?.email}
                         </p>
@@ -443,6 +463,10 @@ const SellerDashboard = () => {
                                     <button onClick={() => setActiveTab('my-products')}
                                         style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: 'white', color: '#059669', border: '1.5px solid #a7f3d0', borderRadius: '9px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
                                         <Package size={15} /> View My Products
+                                    </button>
+                                    <button onClick={() => setActiveTab('orders')}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: 'white', color: '#3b82f6', border: '1.5px solid #bfdbfe', borderRadius: '9px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
+                                        <ClipboardList size={15} /> View Orders
                                     </button>
                                 </div>
                             </div>
@@ -566,6 +590,94 @@ const SellerDashboard = () => {
                                             })}
                                         </tbody>
                                     </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── Orders Tab ─────────────────────────────── */}
+                    {activeTab === 'orders' && (
+                        <div>
+                            {ordersLoading ? (
+                                <div style={{ background: 'white', borderRadius: '14px', padding: '60px', textAlign: 'center', border: '1px solid #d1fae5' }}>
+                                    <div style={{ width: '36px', height: '36px', border: '3px solid #d1fae5', borderTopColor: '#10b981', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+                                    <p style={{ color: '#6b7280', fontSize: '13px', margin: 0 }}>Loading orders...</p>
+                                </div>
+                            ) : orders.length === 0 ? (
+                                <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', padding: '64px', textAlign: 'center', border: '1px solid #d1fae5' }}>
+                                    <div style={{ width: '72px', height: '72px', borderRadius: '20px', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                                        <ClipboardList size={32} style={{ color: '#6ee7b7' }} />
+                                    </div>
+                                    <p style={{ color: '#374151', fontSize: '16px', fontWeight: 700, margin: '0 0 8px' }}>No orders yet</p>
+                                    <p style={{ color: '#9ca3af', fontSize: '13px', margin: 0 }}>Orders for your products will appear here once customers start buying.</p>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    {orders.map(order => {
+                                        const items = Array.isArray(order.items) ? order.items : [];
+                                        const date = new Date(order.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                                        const time = new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                                        return (
+                                            <div key={order.order_id} style={{ background: 'white', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #d1fae5', overflow: 'hidden' }}>
+                                                {/* Order header */}
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: '#f0fdf4', borderBottom: '1px solid #d1fae5', flexWrap: 'wrap', gap: '8px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                                        <div>
+                                                            <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 500 }}>Order</span>
+                                                            <p style={{ fontSize: '13px', fontWeight: 800, color: '#111827', margin: '1px 0 0' }}>#{order.order_id}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 500 }}>Date</span>
+                                                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#374151', margin: '1px 0 0' }}>{date} · {time}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 500 }}>Customer</span>
+                                                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#374151', margin: '1px 0 0' }}>{order.customer_name || 'N/A'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 500 }}>Payment</span>
+                                                            <p style={{ fontSize: '12px', fontWeight: 600, color: '#374151', margin: '1px 0 0' }}>{order.payment_method}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                                                        <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '9999px', fontWeight: 700, background: order.status === 'Paid' ? '#dcfce7' : '#fef9c3', color: order.status === 'Paid' ? '#15803d' : '#854d0e' }}>
+                                                            {order.status}
+                                                        </span>
+                                                        <p style={{ fontSize: '15px', fontWeight: 800, color: '#059669', margin: 0 }}>
+                                                            ₹{parseFloat(order.seller_total).toLocaleString('en-IN')}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Items */}
+                                                <div style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                    {items.map((item, i) => {
+                                                        const imgSrc = (() => { try { const imgs = typeof item.product_images === 'string' ? JSON.parse(item.product_images) : item.product_images; return imgs?.[0] || 'https://placehold.co/40x40?text=P'; } catch { return 'https://placehold.co/40x40?text=P'; } })();
+                                                        return (
+                                                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                <img src={imgSrc} alt="" style={{ width: '46px', height: '46px', objectFit: 'contain', background: '#f0fdf4', borderRadius: '8px', flexShrink: 0, border: '1px solid #d1fae5', padding: '3px' }}
+                                                                    onError={e => { e.target.src = 'https://placehold.co/46x46?text=P'; }} />
+                                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#111827', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.product_name}</p>
+                                                                    <p style={{ fontSize: '11px', color: '#6b7280', margin: 0 }}>Qty: {item.quantity} × ₹{parseFloat(item.price).toLocaleString('en-IN')}</p>
+                                                                </div>
+                                                                <p style={{ fontSize: '14px', fontWeight: 700, color: '#111827', margin: 0, flexShrink: 0 }}>
+                                                                    ₹{(item.quantity * parseFloat(item.price)).toLocaleString('en-IN')}
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+
+                                                {order.address && (
+                                                    <div style={{ padding: '8px 18px 12px', borderTop: '1px solid #f0fdf4' }}>
+                                                        <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 500 }}>Deliver to: </span>
+                                                        <span style={{ fontSize: '11px', color: '#6b7280' }}>{order.address}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>

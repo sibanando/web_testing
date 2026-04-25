@@ -88,6 +88,43 @@ router.delete('/products/:id', verifySeller, async (req, res) => {
     }
 });
 
+// GET /api/seller/orders — all orders that contain this seller's products
+router.get('/orders', verifySeller, async (req, res) => {
+    try {
+        const { rows } = await db.query(`
+            SELECT
+                o.id            AS order_id,
+                o.created_at,
+                o.status,
+                o.address,
+                o.payment_method,
+                u.name          AS customer_name,
+                u.email         AS customer_email,
+                COALESCE(SUM(oi.quantity * oi.price), 0) AS seller_total,
+                JSON_AGG(
+                    JSON_BUILD_OBJECT(
+                        'product_id',     p.id,
+                        'product_name',   p.name,
+                        'product_images', p.images,
+                        'quantity',       oi.quantity,
+                        'price',          oi.price
+                    ) ORDER BY p.id
+                ) AS items
+            FROM orders o
+            JOIN order_items oi ON o.id = oi.order_id
+            JOIN products p     ON oi.product_id = p.id
+            JOIN users u        ON o.user_id = u.id
+            WHERE p.seller_id = $1
+            GROUP BY o.id, u.name, u.email
+            ORDER BY o.created_at DESC
+        `, [req.user.id]);
+        res.json(rows);
+    } catch (err) {
+        console.error('Seller orders error:', err.message);
+        res.status(500).json({ message: 'Failed to fetch orders' });
+    }
+});
+
 // GET /api/seller/stats — seller statistics
 router.get('/stats', verifySeller, async (req, res) => {
     try {

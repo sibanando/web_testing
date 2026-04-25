@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Star, ShoppingCart, Zap, Shield, RefreshCw, Truck, ChevronRight } from 'lucide-react';
+import { Star, ShoppingCart, Zap, Shield, RefreshCw, Truck, ChevronRight, Store, Settings } from 'lucide-react';
 import api from '../services/api';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 
 const ProductDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { addToCart } = useCart();
+    const { user } = useAuth();
+    const isShopRole = user?.is_admin === 1 || user?.is_seller === 1;
 
     const [product, setProduct] = useState(null);
     const [related, setRelated] = useState([]);
@@ -122,17 +125,38 @@ const ProductDetail = () => {
                             </div>
                         )}
                         {/* Action buttons pinned at bottom */}
-                        <div style={{ display: 'flex', gap: '12px', padding: '16px 20px', borderTop: '1px solid #f0f0f0' }}>
-                            <button onClick={handleAddToCart} disabled={adding || stock === 0}
-                                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', fontSize: '14px', fontWeight: 700, borderRadius: '2px', border: 'none', cursor: stock === 0 ? 'not-allowed' : 'pointer', background: added ? '#388e3c' : '#ff9f00', color: 'white', transition: 'background 0.2s' }}>
-                                <ShoppingCart size={18} />
-                                {added ? 'Added!' : stock === 0 ? 'Out of Stock' : 'ADD TO CART'}
-                            </button>
-                            <button onClick={handleBuyNow} disabled={stock === 0}
-                                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', fontSize: '14px', fontWeight: 700, borderRadius: '2px', border: 'none', cursor: stock === 0 ? 'not-allowed' : 'pointer', background: '#fb641b', color: 'white' }}>
-                                <Zap size={18} />
-                                BUY NOW
-                            </button>
+                        <div style={{ padding: '16px 20px', borderTop: '1px solid #f0f0f0' }}>
+                            {isShopRole ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px', background: '#fffbf5', border: '1px solid rgba(232,93,4,0.2)', borderRadius: '4px' }}>
+                                    {user.is_admin === 1 ? <Settings size={16} style={{ color: '#E85D04', flexShrink: 0 }} /> : <Store size={16} style={{ color: '#E85D04', flexShrink: 0 }} />}
+                                    <div>
+                                        <p style={{ fontSize: '13px', fontWeight: 700, color: '#E85D04', margin: '0 0 2px' }}>
+                                            {user.is_admin === 1 ? 'Admin View' : 'Seller View'}
+                                        </p>
+                                        <p style={{ fontSize: '12px', color: '#78716c', margin: 0 }}>
+                                            Cart &amp; checkout are for customers only.{' '}
+                                            <span
+                                                onClick={() => navigate(user.is_admin === 1 ? '/admin' : '/seller')}
+                                                style={{ color: '#E85D04', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}>
+                                                Go to {user.is_admin === 1 ? 'Admin Panel' : 'Seller Dashboard'}
+                                            </span>
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', gap: '12px' }}>
+                                    <button onClick={handleAddToCart} disabled={adding || stock === 0}
+                                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', fontSize: '14px', fontWeight: 700, borderRadius: '2px', border: 'none', cursor: stock === 0 ? 'not-allowed' : 'pointer', background: added ? '#388e3c' : '#ff9f00', color: 'white', transition: 'background 0.2s' }}>
+                                        <ShoppingCart size={18} />
+                                        {added ? 'Added!' : stock === 0 ? 'Out of Stock' : 'ADD TO CART'}
+                                    </button>
+                                    <button onClick={handleBuyNow} disabled={stock === 0}
+                                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', fontSize: '14px', fontWeight: 700, borderRadius: '2px', border: 'none', cursor: stock === 0 ? 'not-allowed' : 'pointer', background: '#fb641b', color: 'white' }}>
+                                        <Zap size={18} />
+                                        BUY NOW
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -180,20 +204,22 @@ const ProductDetail = () => {
                             )}
                         </div>
 
-                        {/* Quantity selector */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-                            <span style={{ fontSize: '13px', color: '#878787', width: '80px' }}>Quantity</span>
-                            <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #ddd', borderRadius: '2px', overflow: 'hidden' }}>
-                                <button onClick={() => setQty(q => Math.max(1, q - 1))}
-                                    style={{ width: '32px', height: '32px', background: 'white', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#444' }}>−</button>
-                                <span style={{ width: '36px', textAlign: 'center', fontSize: '14px', fontWeight: 600, color: '#212121' }}>{qty}</span>
-                                <button onClick={() => setQty(q => Math.min(stock, q + 1))}
-                                    style={{ width: '32px', height: '32px', background: 'white', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#444' }}>+</button>
+                        {/* Quantity selector — customers only */}
+                        {!isShopRole && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                                <span style={{ fontSize: '13px', color: '#878787', width: '80px' }}>Quantity</span>
+                                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #ddd', borderRadius: '2px', overflow: 'hidden' }}>
+                                    <button onClick={() => setQty(q => Math.max(1, q - 1))}
+                                        style={{ width: '32px', height: '32px', background: 'white', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#444' }}>−</button>
+                                    <span style={{ width: '36px', textAlign: 'center', fontSize: '14px', fontWeight: 600, color: '#212121' }}>{qty}</span>
+                                    <button onClick={() => setQty(q => Math.min(stock, q + 1))}
+                                        style={{ width: '32px', height: '32px', background: 'white', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#444' }}>+</button>
+                                </div>
+                                <span style={{ fontSize: '12px', color: stock < 10 ? '#e53935' : '#888' }}>
+                                    {stock === 0 ? 'Out of Stock' : stock < 10 ? `Only ${stock} left` : 'In Stock'}
+                                </span>
                             </div>
-                            <span style={{ fontSize: '12px', color: stock < 10 ? '#e53935' : '#888' }}>
-                                {stock === 0 ? 'Out of Stock' : stock < 10 ? `Only ${stock} left` : 'In Stock'}
-                            </span>
-                        </div>
+                        )}
 
                         {/* Offers */}
                         <div style={{ marginBottom: '20px' }}>

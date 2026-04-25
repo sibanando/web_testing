@@ -20,17 +20,37 @@ async function sendVisFast2SMS(phone, otp) {
     const apiKey = process.env.FAST2SMS_API_KEY;
     if (!apiKey) return false;
     try {
-        const res = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+        // Try OTP route first; fall back to Quick SMS if OTP route needs verification
+        const otpRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
             method: 'POST',
             headers: { authorization: apiKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({ variables_values: otp, route: 'otp', numbers: phone }),
         });
-        const data = await res.json();
-        if (data.return === true) {
-            console.log(`[Fast2SMS] OTP dispatched to +91${phone}`);
+        const otpData = await otpRes.json();
+        if (otpData.return === true) {
+            console.log(`[Fast2SMS] OTP dispatched via OTP route to +91${phone}`);
             return true;
         }
-        console.error('[Fast2SMS] Delivery failed:', JSON.stringify(data.message));
+
+        // OTP route requires DLT verification — try Quick SMS route
+        const qRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+            method: 'POST',
+            headers: { authorization: apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                route: 'q',
+                message: `Your ApniDunia OTP is ${otp}. Valid for 5 minutes. Do not share with anyone.`,
+                language: 'english',
+                flash: 0,
+                numbers: phone,
+            }),
+        });
+        const qData = await qRes.json();
+        if (qData.return === true) {
+            console.log(`[Fast2SMS] OTP dispatched via Quick SMS to +91${phone}`);
+            return true;
+        }
+
+        console.error('[Fast2SMS] Both routes failed:', JSON.stringify(qData.message));
         return false;
     } catch (err) {
         console.error('[Fast2SMS] Request error:', err.message);
@@ -62,13 +82,18 @@ router.post('/send-otp', async (req, res) => {
 
         const smsSent = await sendVisFast2SMS(phone, otp);
         if (!smsSent) {
-            // Fallback: visible in server logs (docker compose logs backend)
             console.log(`\n==============================`);
             console.log(`[OTP] +91${phone}  =>  ${otp}`);
             console.log(`==============================\n`);
         }
 
-        res.json({ message: 'OTP sent successfully', via: smsSent ? 'sms' : 'console' });
+        const isDev = process.env.NODE_ENV !== 'production';
+        // In dev, always return the OTP so login works regardless of SMS delivery status
+        res.json({
+            message: 'OTP sent successfully',
+            via: smsSent ? 'sms' : 'console',
+            ...(isDev ? { dev_otp: otp } : {}),
+        });
     } catch (err) {
         console.error('Send OTP error:', err.message);
         res.status(500).json({ message: 'Failed to send OTP' });

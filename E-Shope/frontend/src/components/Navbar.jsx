@@ -152,7 +152,7 @@ const Navbar = () => {
                             <Store size={14} /> Seller
                         </Link>
                     )}
-                    {!isMobile && !isTablet && (!user || user.is_seller !== 1) && (
+                    {!isMobile && !isTablet && (!user || (user.is_seller !== 1 && user.is_admin !== 1)) && (
                         <Link to="/login?tab=register&seller=1" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap' }}
                             onMouseEnter={e => e.currentTarget.style.color = '#fbbf24'}
                             onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}>
@@ -160,20 +160,22 @@ const Navbar = () => {
                         </Link>
                     )}
 
-                    {/* Cart */}
-                    <Link to="/cart" style={{ display: 'flex', alignItems: 'center', gap: '7px', color: 'white', textDecoration: 'none' }}
-                        onMouseEnter={e => e.currentTarget.style.color = '#fbbf24'}
-                        onMouseLeave={e => e.currentTarget.style.color = 'white'}>
-                        <div style={{ position: 'relative' }}>
-                            <ShoppingCart size={isMobile ? 20 : 22} />
-                            {itemCount > 0 && (
-                                <span style={{ position: 'absolute', top: '-9px', right: '-9px', background: 'linear-gradient(135deg, #f97316, #ef4444)', color: 'white', fontSize: '10px', fontWeight: 800, borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
-                                    {itemCount > 9 ? '9+' : itemCount}
-                                </span>
-                            )}
-                        </div>
-                        {!isMobile && <span style={{ fontSize: '13px', fontWeight: 600 }}>Cart</span>}
-                    </Link>
+                    {/* Cart — hidden for sellers and admins */}
+                    {(!user || (user.is_admin !== 1 && user.is_seller !== 1)) && (
+                        <Link to="/cart" style={{ display: 'flex', alignItems: 'center', gap: '7px', color: 'white', textDecoration: 'none' }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#fbbf24'}
+                            onMouseLeave={e => e.currentTarget.style.color = 'white'}>
+                            <div style={{ position: 'relative' }}>
+                                <ShoppingCart size={isMobile ? 20 : 22} />
+                                {itemCount > 0 && (
+                                    <span style={{ position: 'absolute', top: '-9px', right: '-9px', background: 'linear-gradient(135deg, #f97316, #ef4444)', color: 'white', fontSize: '10px', fontWeight: 800, borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
+                                        {itemCount > 9 ? '9+' : itemCount}
+                                    </span>
+                                )}
+                            </div>
+                            {!isMobile && <span style={{ fontSize: '13px', fontWeight: 600 }}>Cart</span>}
+                        </Link>
+                    )}
 
                     {/* Hamburger — mobile only */}
                     {isMobile && (
@@ -243,10 +245,16 @@ const Navbar = () => {
                                 <Store size={16} /> Seller Panel
                             </Link>
                         )}
-                        {(!user || user.is_seller !== 1) && (
+                        {(!user || (user.is_seller !== 1 && user.is_admin !== 1)) && (
                             <Link to="/login?tab=register&seller=1" onClick={() => setShowMobileMenu(false)}
                                 style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px', fontSize: '14px', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', borderRadius: '6px' }}>
                                 <Store size={16} /> Become a Seller
+                            </Link>
+                        )}
+                        {(!user || (user.is_admin !== 1 && user.is_seller !== 1)) && (
+                            <Link to="/cart" onClick={() => setShowMobileMenu(false)}
+                                style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px', fontSize: '14px', color: 'rgba(255,255,255,0.85)', textDecoration: 'none', borderRadius: '6px' }}>
+                                <ShoppingCart size={16} /> My Cart {itemCount > 0 && <span style={{ background: 'linear-gradient(135deg, #f97316, #ef4444)', color: 'white', fontSize: '10px', fontWeight: 800, borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{itemCount > 9 ? '9+' : itemCount}</span>}
                             </Link>
                         )}
                         {user && (

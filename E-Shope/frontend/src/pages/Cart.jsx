@@ -1,7 +1,7 @@
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, ShoppingCart, ShieldCheck, Truck } from 'lucide-react';
+import { Trash2, ShoppingCart, ShieldCheck, Truck, Store, Settings } from 'lucide-react';
 import useResponsive from '../hooks/useResponsive';
 
 const Cart = () => {
@@ -9,6 +9,32 @@ const Cart = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const { isMobile } = useResponsive();
+
+    // Sellers and admins do not have a cart — redirect them to their panel
+    if (user && (user.is_admin === 1 || user.is_seller === 1)) {
+        const isAdmin = user.is_admin === 1;
+        return (
+            <div style={{ background: '#f1f3f6', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 16px' }}>
+                <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', padding: '48px 40px', textAlign: 'center', maxWidth: '400px', width: '100%' }}>
+                    <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg, #FFF5EB, #FDE0C0)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                        {isAdmin ? <Settings size={32} style={{ color: '#E85D04' }} /> : <Store size={32} style={{ color: '#E85D04' }} />}
+                    </div>
+                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
+                        {isAdmin ? 'Admin accounts' : 'Seller accounts'} can't shop
+                    </h2>
+                    <p style={{ color: '#64748b', fontSize: '14px', lineHeight: 1.6, marginBottom: '28px' }}>
+                        The cart and checkout are reserved for customers.
+                        {isAdmin ? ' Use the Admin Panel to manage products, orders and users.' : ' Use the Seller Dashboard to manage your listings and track orders.'}
+                    </p>
+                    <button
+                        onClick={() => navigate(isAdmin ? '/admin' : '/seller')}
+                        style={{ padding: '12px 32px', fontWeight: 700, fontSize: '14px', borderRadius: '6px', background: 'linear-gradient(135deg, #E85D04, #FB8500)', color: 'white', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(232,93,4,0.3)' }}>
+                        Go to {isAdmin ? 'Admin Panel' : 'Seller Dashboard'}
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     const handleCheckout = () => {
         if (!user) {

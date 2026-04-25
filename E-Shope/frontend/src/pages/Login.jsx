@@ -24,7 +24,8 @@ const Login = () => {
 
     // OTP state
     const [otpSent, setOtpSent] = useState(false);
-    const [otpVia, setOtpVia] = useState('console'); // 'sms' | 'console'
+    const [otpVia, setOtpVia] = useState('console'); // 'sms' | 'console' | 'sms_failed'
+    const [devOtp, setDevOtp] = useState(null);
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [otpTimer, setOtpTimer] = useState(0);
     const otpRefs = useRef([]);
@@ -56,6 +57,10 @@ const Login = () => {
         if (result.success) {
             setOtpSent(true);
             setOtpVia(result.via || 'console');
+            if (result.dev_otp) {
+                setDevOtp(result.dev_otp);
+                setOtp(result.dev_otp.split(''));
+            }
             startTimer();
         } else {
             setError(result.message);
@@ -144,6 +149,7 @@ const Login = () => {
         setError('');
         setOtpSent(false);
         setOtpVia('console');
+        setDevOtp(null);
         setOtp(['', '', '', '', '', '']);
     };
 
@@ -152,6 +158,7 @@ const Login = () => {
         setError('');
         setOtpSent(false);
         setOtpVia('console');
+        setDevOtp(null);
         setOtp(['', '', '', '', '', '']);
     };
 
@@ -245,24 +252,28 @@ const Login = () => {
                             <p style={{ margin: 0, fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>OTP sent to</p>
                             <p style={{ margin: '2px 0 0', fontSize: '14px', color: '#FDBA74', fontWeight: 600, letterSpacing: '0.5px' }}>+91 {phone}</p>
                         </div>
-                        <button type="button" onClick={() => { setOtpSent(false); setOtpVia('console'); setOtp(['', '', '', '', '', '']); }}
+                        <button type="button" onClick={() => { setOtpSent(false); setOtpVia('console'); setDevOtp(null); setOtp(['', '', '', '', '', '']); }}
                             style={{ background: 'none', border: 'none', color: '#FB8500', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
                             Change
                         </button>
                     </div>
 
                     <div style={{
-                        background: otpVia === 'sms' ? 'rgba(5,150,105,0.1)' : 'rgba(251,191,36,0.1)',
-                        border: `1px solid ${otpVia === 'sms' ? 'rgba(5,150,105,0.3)' : 'rgba(251,191,36,0.25)'}`,
+                        background: otpVia === 'sms' ? 'rgba(5,150,105,0.1)' : (otpVia === 'sms_failed' && devOtp) ? 'rgba(251,191,36,0.1)' : otpVia === 'sms_failed' ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.1)',
+                        border: `1px solid ${otpVia === 'sms' ? 'rgba(5,150,105,0.3)' : (otpVia === 'sms_failed' && devOtp) ? 'rgba(251,191,36,0.3)' : otpVia === 'sms_failed' ? 'rgba(239,68,68,0.3)' : 'rgba(251,191,36,0.25)'}`,
                         borderRadius: '10px',
                         padding: '10px 14px',
-                        display: 'flex', alignItems: 'center', gap: '8px',
+                        display: 'flex', alignItems: 'flex-start', gap: '8px',
                     }}>
-                        <Shield size={14} style={{ color: otpVia === 'sms' ? '#34d399' : '#fbbf24' }} />
-                        <span style={{ fontSize: '12px', color: otpVia === 'sms' ? '#6ee7b7' : '#fcd34d' }}>
+                        <Shield size={14} style={{ color: otpVia === 'sms' ? '#34d399' : (otpVia === 'sms_failed' && devOtp) ? '#fbbf24' : otpVia === 'sms_failed' ? '#f87171' : '#fbbf24', marginTop: '1px', flexShrink: 0 }} />
+                        <span style={{ fontSize: '12px', color: otpVia === 'sms' ? '#6ee7b7' : (otpVia === 'sms_failed' && devOtp) ? '#fcd34d' : otpVia === 'sms_failed' ? '#fca5a5' : '#fcd34d' }}>
                             {otpVia === 'sms'
                                 ? 'OTP sent via SMS to your mobile number.'
-                                : 'No SMS key set — run: docker compose logs backend  to see the OTP.'}
+                                : devOtp
+                                ? <span>Dev mode — OTP auto-filled: <strong style={{ letterSpacing: '2px', color: '#FB8500' }}>{devOtp}</strong></span>
+                                : otpVia === 'sms_failed'
+                                ? 'SMS delivery failed — OTP is in the server log. Contact support if this persists.'
+                                : 'OTP generated — check server log: docker compose logs backend'}
                         </span>
                     </div>
 
