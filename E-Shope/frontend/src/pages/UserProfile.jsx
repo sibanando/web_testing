@@ -247,10 +247,10 @@ const UserProfile = () => {
                                         <div style={{ padding: '10px 12px', background: '#f8fafc', border: '1.5px solid #f1f5f9', borderRadius: '8px' }}>
                                             <span style={{
                                                 display: 'inline-block', padding: '3px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 700,
-                                                background: user.is_admin === 1 ? '#fef2f2' : '#eff6ff',
-                                                color: user.is_admin === 1 ? '#dc2626' : '#2563eb',
+                                                background: user.is_admin === 1 ? '#fef2f2' : user.is_seller === 1 ? '#ecfdf5' : '#eff6ff',
+                                                color: user.is_admin === 1 ? '#dc2626' : user.is_seller === 1 ? '#059669' : '#2563eb',
                                             }}>
-                                                {user.is_admin === 1 ? 'Administrator' : 'Customer'}
+                                                {user.is_admin === 1 ? 'Administrator' : user.is_seller === 1 ? 'Seller' : 'Customer'}
                                             </span>
                                         </div>
                                     </div>
