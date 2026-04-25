@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/apnidunia',
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
     max: 10,
     idleTimeoutMillis: 60000,
     connectionTimeoutMillis: 30000,

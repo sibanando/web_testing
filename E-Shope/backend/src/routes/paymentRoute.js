@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const { verifyToken } = require('../middleware/auth');
 
 // In-memory payment session store (demo only)
 const paymentSessions = new Map();
 
 // POST /api/payment/upi-qr  — generate UPI deep-link for QR code
-router.post('/upi-qr', (req, res) => {
+router.post('/upi-qr', verifyToken, (req, res) => {
     const { amount } = req.body;
     if (!amount) return res.status(400).json({ message: 'Amount is required' });
 
@@ -60,7 +61,7 @@ router.post('/upi-qr', (req, res) => {
 });
 
 // POST /api/payment/confirm  — user clicks "I've Paid", start verification
-router.post('/confirm', (req, res) => {
+router.post('/confirm', verifyToken, (req, res) => {
     const { paymentId } = req.body;
     const session = paymentSessions.get(paymentId);
     if (!session) return res.status(404).json({ status: 'expired', message: 'Payment session expired or not found' });
@@ -82,7 +83,7 @@ router.post('/confirm', (req, res) => {
 });
 
 // GET /api/payment/status/:paymentId  — poll payment status
-router.get('/status/:paymentId', (req, res) => {
+router.get('/status/:paymentId', verifyToken, (req, res) => {
     const session = paymentSessions.get(req.params.paymentId);
     if (!session) {
         return res.json({ status: 'expired', message: 'Payment session expired' });
@@ -107,7 +108,7 @@ router.get('/status/:paymentId', (req, res) => {
 });
 
 // POST /api/payment/verify  — legacy direct verify (kept for PhonePe/GPay)
-router.post('/verify', (req, res) => {
+router.post('/verify', verifyToken, (req, res) => {
     const { transactionId, amount, method } = req.body;
 
     setTimeout(() => {
@@ -122,7 +123,7 @@ router.post('/verify', (req, res) => {
 });
 
 // POST /api/payment/phonepe  — PhonePe deep-link
-router.post('/phonepe', (req, res) => {
+router.post('/phonepe', verifyToken, (req, res) => {
     const { amount, phone } = req.body;
     setTimeout(() => {
         res.json({
@@ -135,7 +136,7 @@ router.post('/phonepe', (req, res) => {
 });
 
 // POST /api/payment/gpay  — Google Pay deep-link
-router.post('/gpay', (req, res) => {
+router.post('/gpay', verifyToken, (req, res) => {
     const { amount } = req.body;
     setTimeout(() => {
         res.json({

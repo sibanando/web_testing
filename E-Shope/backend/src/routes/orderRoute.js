@@ -7,24 +7,54 @@ const { verifyToken } = require('../middleware/auth');
 router.post('/', verifyToken, async (req, res) => {
     const client = await db.connect();
     try {
-        const { total, items, address, phone, paymentMethod, transactionId } = req.body;
-        if (!total || !items || !items.length) {
-            return res.status(400).json({ message: 'Total and items are required' });
+        const { items, address, phone, paymentMethod, transactionId } = req.body;
+        if (!items || !items.length) {
+            return res.status(400).json({ message: 'Items are required' });
+        }
+
+        // Validate each item has a positive integer quantity
+        for (const item of items) {
+            const qty = parseInt(item.quantity);
+            if (!item.id || !qty || qty < 1 || qty > 100) {
+                return res.status(400).json({ message: 'Invalid item quantity' });
+            }
         }
 
         await client.query('BEGIN');
 
+        // Fetch authoritative prices from DB — never trust client-supplied prices
+        let serverTotal = 0;
+        const resolvedItems = [];
+        for (const item of items) {
+            const { rows } = await client.query(
+                'SELECT id, price, stock FROM products WHERE id = $1',
+                [item.id]
+            );
+            const product = rows[0];
+            if (!product) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ message: `Product ${item.id} not found` });
+            }
+            const qty = parseInt(item.quantity);
+            if (product.stock < qty) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ message: `Insufficient stock for product ${item.id}` });
+            }
+            serverTotal += product.price * qty;
+            resolvedItems.push({ id: product.id, quantity: qty, price: product.price });
+        }
+
         const { rows } = await client.query(
             `INSERT INTO orders (user_id, total, status, address, phone, payment_method, transaction_id)
              VALUES ($1, $2, 'Paid', $3, $4, $5, $6) RETURNING *`,
-            [req.user.id, total, address || '', phone || '', paymentMethod || 'UPI', transactionId || '']
+            [req.user.id, serverTotal, address || '', phone || '', paymentMethod || 'UPI', transactionId || '']
         );
         const order = rows[0];
 
-        for (const item of items) {
+        for (const item of resolvedItems) {
             await client.query(
                 'INSERT INTO order_items (order_id, product_id, quantity, price) VALUES ($1, $2, $3, $4)',
-                [order.id, item.id, item.quantity, parseFloat(item.price)]
+                [order.id, item.id, item.quantity, item.price]
             );
             // Decrement stock; clamp at 0
             await client.query(
@@ -37,12 +67,13 @@ router.post('/', verifyToken, async (req, res) => {
         res.status(201).json({
             orderId: order.id,
             status: 'Paid',
+            total: serverTotal,
             message: 'Order placed successfully'
         });
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Create order error:', err.message);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ message: 'Order creation failed' });
     } finally {
         client.release();
     }
@@ -69,7 +100,8 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
         `, [requestedId]);
         res.json(rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Get orders error:', err.message);
+        res.status(500).json({ message: 'Failed to fetch orders' });
     }
 });
 

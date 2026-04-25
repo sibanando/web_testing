@@ -84,12 +84,17 @@ router.post('/verify-otp', async (req, res) => {
         }
 
         const stored = otpStore.get(phone);
-        if (!stored || stored.otp !== otp) {
-            return res.status(401).json({ message: 'Invalid OTP' });
+        if (!stored) {
+            return res.status(401).json({ message: 'OTP not found. Please request a new one' });
         }
         if (Date.now() > stored.expiresAt) {
             otpStore.delete(phone);
             return res.status(401).json({ message: 'OTP has expired. Please request a new one' });
+        }
+        if (stored.otp !== otp) {
+            // Invalidate on wrong guess — prevents brute-force within the validity window
+            otpStore.delete(phone);
+            return res.status(401).json({ message: 'Invalid OTP. Please request a new one' });
         }
         otpStore.delete(phone);
 
@@ -117,6 +122,9 @@ router.post('/register', async (req, res) => {
         const { name, email, phone, password, is_seller = 0 } = req.body;
         if (!name || !password) {
             return res.status(400).json({ message: 'Name and password are required' });
+        }
+        if (password.length < 8) {
+            return res.status(400).json({ message: 'Password must be at least 8 characters' });
         }
         if (!email && !phone) {
             return res.status(400).json({ message: 'Email or mobile number is required' });

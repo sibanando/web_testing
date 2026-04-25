@@ -45,7 +45,7 @@ router.get('/', async (req, res) => {
         res.json(rows);
     } catch (err) {
         console.error('Get products error:', err.message);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ message: 'Failed to fetch products' });
     }
 });
 
@@ -56,7 +56,8 @@ router.get('/:id', async (req, res) => {
         if (!rows[0]) return res.status(404).json({ message: 'Product not found' });
         res.json(rows[0]);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Get product error:', err.message);
+        res.status(500).json({ message: 'Failed to fetch product' });
     }
 });
 
@@ -79,7 +80,7 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
         res.status(201).json(rows[0]);
     } catch (err) {
         console.error('Create product error:', err.message);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ message: 'Failed to create product' });
     }
 });
 

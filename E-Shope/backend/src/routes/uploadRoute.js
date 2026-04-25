@@ -2,7 +2,14 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const router = express.Router();
-const { verifyToken } = require('../middleware/auth');
+const { verifyToken, requireAdmin } = require('../middleware/auth');
+
+const requireSellerOrAdmin = (req, res, next) => {
+    if (!req.user.is_seller && !req.user.is_admin) {
+        return res.status(403).json({ message: 'Seller or admin access required to upload' });
+    }
+    next();
+};
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, path.join(__dirname, '../../uploads')),
@@ -23,8 +30,8 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
 
-// POST /api/upload — upload a single product image (requires authentication)
-router.post('/', verifyToken, upload.single('image'), (req, res) => {
+// POST /api/upload — upload a single product image (sellers and admins only)
+router.post('/', verifyToken, requireSellerOrAdmin, upload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'No image file provided' });
     const imageUrl = `/uploads/${req.file.filename}`;
     res.json({ url: imageUrl });

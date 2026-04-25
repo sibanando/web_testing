@@ -43,7 +43,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 app.use(cors({
     origin: (origin, callback) => {
         if (!allowedOrigins) return callback(null, true); // open in dev/staging
-        if (!origin || allowedOrigins.some(o => origin.startsWith(o))) {
+        if (!origin || allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
         callback(new Error(`Origin ${origin} not allowed by CORS`));
@@ -84,6 +84,7 @@ app.use('/api/', apiLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/send-otp', otpLimiter);
+app.use('/api/auth/verify-otp', otpLimiter);
 
 // ── Static uploads ────────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
