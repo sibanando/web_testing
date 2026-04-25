@@ -66,6 +66,12 @@ const initDb = async () => {
             FOREIGN KEY (order_id) REFERENCES orders(id),
             FOREIGN KEY (product_id) REFERENCES products(id)
         );
+
+        CREATE TABLE IF NOT EXISTS subscribers (
+            id         SERIAL PRIMARY KEY,
+            email      TEXT NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
     `);
 
     // Add phone column if missing (migration for existing DBs)

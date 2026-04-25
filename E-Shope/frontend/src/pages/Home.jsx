@@ -26,7 +26,8 @@ const Home = () => {
     const [timeLeft, setTimeLeft] = useState(getTimeLeft);
     const { isMobile, isTablet } = useResponsive();
     const [subEmail, setSubEmail] = useState('');
-    const [subStatus, setSubStatus] = useState(null); // null | 'success' | 'error'
+    const [subStatus, setSubStatus] = useState(null); // null | 'success' | 'already' | 'error'
+    const [subLoading, setSubLoading] = useState(false);
     const [searchParams] = useSearchParams();
     const activeCategory = searchParams.get('category');
     const activeSearch = searchParams.get('search');
@@ -76,15 +77,25 @@ const Home = () => {
         api.get(url).then(r => { if (Array.isArray(r.data)) setProducts(r.data); }).catch(() => {});
     }, [activeCategory, activeSearch]);
 
-    const handleSubscribe = () => {
+    const handleSubscribe = async () => {
         if (!subEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(subEmail)) {
             setSubStatus('error');
             setTimeout(() => setSubStatus(null), 3000);
             return;
         }
-        setSubStatus('success');
-        setSubEmail('');
-        setTimeout(() => setSubStatus(null), 4000);
+        setSubLoading(true);
+        setSubStatus(null);
+        try {
+            await api.post('/subscribe', { email: subEmail.trim() });
+            setSubStatus('success');
+            setSubEmail('');
+        } catch (err) {
+            const already = err.response?.data?.already;
+            setSubStatus(already ? 'already' : 'error');
+        } finally {
+            setSubLoading(false);
+            setTimeout(() => setSubStatus(null), 4000);
+        }
     };
 
     const pad = (n) => String(n).padStart(2, '0');
@@ -276,13 +287,22 @@ const Home = () => {
                                 onKeyDown={e => e.key === 'Enter' && handleSubscribe()}
                                 style={{ flex: 1, padding: '12px 18px', borderRadius: '8px', border: subStatus === 'error' ? '2px solid #fca5a5' : '2px solid transparent', fontSize: '14px', color: '#1e293b', background: 'white', outline: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
                             />
-                            <button onClick={handleSubscribe} style={{ padding: '12px 22px', background: 'linear-gradient(135deg, #fbbf24, #f97316)', color: '#1e293b', border: 'none', borderRadius: '8px', fontWeight: 800, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(249,115,22,0.4)', whiteSpace: 'nowrap' }}>
-                                Subscribe
+                            <button
+                                onClick={handleSubscribe}
+                                disabled={subLoading}
+                                style={{ padding: '12px 22px', background: subLoading ? '#888' : 'linear-gradient(135deg, #fbbf24, #f97316)', color: '#1e293b', border: 'none', borderRadius: '8px', fontWeight: 800, fontSize: '14px', cursor: subLoading ? 'not-allowed' : 'pointer', boxShadow: '0 4px 12px rgba(249,115,22,0.4)', whiteSpace: 'nowrap', transition: 'background 0.2s' }}
+                            >
+                                {subLoading ? '...' : 'Subscribe'}
                             </button>
                         </div>
                         {subStatus === 'success' && (
                             <p style={{ marginTop: '14px', fontSize: '13px', fontWeight: 700, color: '#86efac', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                                 ✓ You're subscribed! Watch your inbox for exclusive deals.
+                            </p>
+                        )}
+                        {subStatus === 'already' && (
+                            <p style={{ marginTop: '14px', fontSize: '13px', fontWeight: 700, color: '#fbbf24', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                ℹ This email is already subscribed.
                             </p>
                         )}
                         {subStatus === 'error' && (

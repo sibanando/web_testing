@@ -96,7 +96,8 @@ app.use('/api/orders',  require('./src/routes/orderRoute'));
 app.use('/api/admin',   require('./src/routes/adminRoute'));
 app.use('/api/seller',  require('./src/routes/sellerRoute'));
 app.use('/api/payment', require('./src/routes/paymentRoute'));
-app.use('/api/upload',  require('./src/routes/uploadRoute'));
+app.use('/api/upload',     require('./src/routes/uploadRoute'));
+app.use('/api/subscribe', require('./src/routes/subscribeRoute'));
 
 // ── Health / readiness probes ─────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
