@@ -44,10 +44,10 @@ backend/
     authRoute.js            # register, login, OTP (crypto.randomInt), profile
     adminRoute.js           # admin CRUD — requires verifyToken + requireAdmin
     sellerRoute.js          # seller CRUD — requires verifySeller middleware
-    orderRoute.js           # create order + stock decrement (pg transaction)
+    orderRoute.js           # create order + server-side pricing + stock decrement (pg transaction)
     productRoute.js         # public listing + admin-only creation
     paymentRoute.js         # mock UPI/PhonePe/GPay flows (in-memory — demo only)
-    uploadRoute.js          # Multer image upload (requires JWT)
+    uploadRoute.js          # Multer image upload (requires JWT + seller/admin)
 
 frontend/src/
   main.jsx                  # Root — wraps app in ErrorBoundary + providers
@@ -83,21 +83,36 @@ k8s/
 - **No migrations** — schema lives in `initDb()` with `CREATE TABLE IF NOT EXISTS`. Additive changes go in the migration block below the main schema.
 - **Shared auth middleware** — always import `verifyToken`/`requireAdmin` from `src/middleware/auth.js`. Never duplicate JWT logic in route files.
 - **Inline styles only** — do not add Tailwind classes. All styling uses React `style={{}}`.
-- **Mock payments** — `paymentRoute.js` simulates UPI/PhonePe/GPay with `setTimeout`. Do not treat as real payment integration.
-- **Stock decrement** — happens inside the order creation transaction (`orderRoute.js`). Always use `GREATEST(0, stock - qty)`.
-- **Crypto OTP** — OTP is generated with `crypto.randomInt` (not `Math.random`). Stored in-memory Map; replace with Redis for multi-replica deployments.
-- **Rate limiting** — `express-rate-limit` applied globally (200 req/15 min), tighter on auth (20/15 min) and OTP (3/min).
+- **Mock payments** — `paymentRoute.js` simulates UPI/PhonePe/GPay with `setTimeout`. Do not treat as real payment integration. All payment routes require `verifyToken`.
+- **Server-side order pricing** — `orderRoute.js` fetches product prices from the DB and ignores any price/total sent by the client. Never trust client-supplied prices.
+- **Stock decrement** — happens inside the order creation transaction (`orderRoute.js`). Always use `GREATEST(0, stock - qty)`. Stock is checked before decrement; out-of-stock returns 400.
+- **Crypto OTP** — OTP is generated with `crypto.randomInt` (not `Math.random`). Stored in-memory Map; replace with Redis for multi-replica deployments. OTP is invalidated immediately on any wrong guess (prevents brute-force within the validity window).
+- **Rate limiting** — `express-rate-limit` applied globally (200 req/15 min), tighter on auth (20/15 min), and OTP send+verify (3/min each). In-memory store only — use `rate-limit-redis` for multi-replica K8s.
 - **Graceful shutdown** — SIGTERM/SIGINT handlers close the HTTP server cleanly before exit.
+- **Upload restriction** — `/api/upload` requires `verifyToken` + is_seller or is_admin. Regular customers cannot upload files.
 
 ## Security Rules
 
 - Every mutation endpoint that modifies user data must have `verifyToken`.
 - Admin routes must have both `verifyToken` AND `requireAdmin`.
+- Payment routes must have `verifyToken` — never expose payment session creation/polling to unauthenticated callers.
+- Upload route requires `verifyToken` + seller/admin check (`requireSellerOrAdmin` in `uploadRoute.js`).
 - Profile/resource update endpoints must verify `req.user.id === parseInt(req.params.id)` unless `req.user.is_admin`.
 - Never return OTP values in API responses — log to server console only.
-- CORS allowed origins come from `ALLOWED_ORIGINS` env var (comma-separated).
+- Never trust client-supplied prices or totals in orders — always resolve from DB.
+- CORS: `ALLOWED_ORIGINS` must be exact origin strings (e.g. `https://yourdomain.com`). The check uses strict `===` — not `startsWith`, which can be bypassed with crafted subdomains.
 - Never hardcode JWT_SECRET in route files — always use `src/middleware/auth.js`.
 - In `NODE_ENV=production`, the app exits at startup if JWT_SECRET is the default value.
+- Never expose raw `err.message` in 500 responses — use generic messages and log internally.
+- Password minimum length is 8 characters (enforced in `authRoute.js` register handler).
+- DB SSL (`DB_SSL=true`) uses `rejectUnauthorized: true` — self-signed/invalid certs are rejected.
+
+## Known Limitations (non-blocking for production)
+
+- **Rate limiter is in-memory** — doesn't sync across K8s replicas. Add `rate-limit-redis` for horizontal scaling.
+- **OTP store is in-memory** — doesn't survive restarts or sync across replicas. Replace with Redis + TTL for HA.
+- **CSP disabled** — `contentSecurityPolicy: false` in helmet config. Enable and tune for hardened production.
+- **Payment is mock** — integrate Razorpay or Cashfree for real transactions.
 
 ## Environment Variables
 

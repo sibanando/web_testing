@@ -10,7 +10,8 @@
 7. [Database](#7-database)
 8. [CI/CD — GitHub Actions](#8-cicd--github-actions)
 9. [After Code Changes](#9-after-code-changes)
-10. [Production Checklist](#10-production-checklist)
+10. [Security Hardening](#10-security-hardening)
+11. [Production Checklist](#11-production-checklist)
 
 ---
 
@@ -313,27 +314,91 @@ kubectl rollout restart deployment/frontend -n apnidunia
 
 ---
 
-## 10. Production Checklist
+## 10. Security Hardening
+
+### Vulnerabilities fixed (as of commit 623e823)
+
+| Severity | Issue | Fix applied |
+|----------|-------|-------------|
+| Critical | CORS `startsWith` bypass — crafted subdomain could spoof origin | Changed to strict `===` match in `index.js` |
+| Critical | Client-supplied order price — user could send `total: 1` | Order total and item prices now fetched server-side from DB |
+| High | OTP brute-force — wrong guesses didn't invalidate OTP | OTP deleted on first wrong guess; `/verify-otp` rate-limited (3/min) |
+| High | Payment endpoints unauthenticated — anyone could create/poll sessions | `verifyToken` added to all `/api/payment/*` routes |
+| High | ReDoS in `minimatch`, `path-to-regexp`, `picomatch` (npm deps) | `npm audit fix` — 0 vulnerabilities |
+| High | Internal DB errors exposed in API responses | Replaced with generic 500 messages; errors logged server-side only |
+| Medium | DB SSL `rejectUnauthorized: false` — accepted invalid certs | Changed to `true` |
+| Medium | Any logged-in user could upload files (storage abuse) | Upload restricted to sellers and admins only |
+| Medium | No password minimum length | 8-character minimum enforced at registration |
+
+### Known remaining limitations
+
+These require infrastructure changes rather than code changes:
+
+- **Rate limiter is in-memory** — per-pod counters don't sync in K8s multi-replica deployments. Add `rate-limit-redis`:
+  ```bash
+  npm install rate-limit-redis ioredis
+  ```
+  Then pass a `store` option to each `rateLimit()` call in `index.js`.
+
+- **OTP store is in-memory** — doesn't survive pod restarts, doesn't sync across replicas. Replace `otpStore` Map in `authRoute.js` with Redis + TTL:
+  ```js
+  await redis.set(`otp:${phone}`, otp, 'EX', 300); // 5-min TTL
+  ```
+
+- **CSP disabled** — `contentSecurityPolicy: false` in helmet. Enable for hardened production:
+  ```js
+  helmet({
+      contentSecurityPolicy: {
+          directives: {
+              defaultSrc: ["'self'"],
+              scriptSrc: ["'self'"],
+              styleSrc: ["'self'", "'unsafe-inline'"],
+              imgSrc: ["'self'", "https:", "data:"],
+          }
+      }
+  })
+  ```
+
+- **Mock payments** — integrate [Razorpay](https://razorpay.com) or [Cashfree](https://cashfree.com) before going live.
+
+### Running a security audit
+
+```bash
+# Inside backend container
+docker exec e-shope-backend-1 npm audit
+
+# Or with docker run (if container is down)
+docker run --rm -v $(pwd)/backend:/app -w /app node:20-alpine npm audit
+```
+
+---
+
+## 11. Production Checklist
 
 ### Security
 - [ ] `JWT_SECRET` changed (`openssl rand -hex 64`)
 - [ ] `POSTGRES_PASSWORD` changed from default
-- [ ] `ALLOWED_ORIGINS` set to your domain(s)
+- [ ] `ALLOWED_ORIGINS` set to exact origin(s) — e.g. `https://yourdomain.com` (no trailing slash)
 - [ ] `NODE_ENV=production` set
 - [ ] Secrets in `.env` (gitignored) or Sealed Secrets — **not committed to git**
 - [ ] TLS enabled (cert-manager + Let's Encrypt)
 - [ ] Git remote URL does not contain credentials (use SSH or token via env)
+- [ ] `npm audit` shows 0 high/critical vulnerabilities
+- [ ] CSP configured in helmet (currently disabled — see Section 10)
+- [ ] Rate limiter backed by Redis for multi-replica deployments
 
 ### Infrastructure
 - [ ] Images pushed to a registry (GHCR / ECR / GCR / ACR)
 - [ ] `imagePullPolicy: Always` in K8s deployments
 - [ ] PVC StorageClass → cloud-native (EBS / GCP PD / Azure Disk)
 - [ ] Postgres as managed service for HA (RDS / Cloud SQL / Azure DB)
+- [ ] `DB_SSL=true` (and managed DB uses a valid CA-signed cert — `rejectUnauthorized: true`)
 - [ ] File uploads → S3 / Cloud Storage / Azure Blob
 - [ ] `k8s/network-policy.yaml` applied (postgres ↔ backend only)
 
 ### Application
 - [ ] `FAST2SMS_API_KEY` set for real OTP delivery
+- [ ] OTP store migrated from in-memory Map to Redis (required for HA)
 - [ ] Real payment gateway integrated (Razorpay for India)
 - [ ] Demo credentials removed or rotated in production seed
 
