@@ -11,7 +11,7 @@ const adminGuard = [verifyToken, requireAdmin];
 router.get('/users', adminGuard, async (req, res) => {
     try {
         const { rows } = await db.query(
-            'SELECT id, name, email, is_admin, is_seller, created_at FROM users ORDER BY id DESC'
+            'SELECT id, name, email, phone, is_admin, is_seller, oauth_provider, created_at FROM users ORDER BY id DESC'
         );
         res.json(rows);
     } catch (err) {

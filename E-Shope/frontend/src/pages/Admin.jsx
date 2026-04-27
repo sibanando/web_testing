@@ -96,6 +96,7 @@ const Admin = () => {
     const [editUserData, setEditUserData] = useState({});
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [userSearch, setUserSearch] = useState('');
+    const [userAuthFilter, setUserAuthFilter] = useState('all');
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -209,10 +210,17 @@ const Admin = () => {
         p.category?.toLowerCase().includes(productSearch.toLowerCase())
     );
 
-    const filteredUsers = users.filter(u =>
-        u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
-        u.email?.toLowerCase().includes(userSearch.toLowerCase())
-    );
+    const filteredUsers = users.filter(u => {
+        const matchesSearch = u.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
+            u.email?.toLowerCase().includes(userSearch.toLowerCase());
+        if (!matchesSearch) return false;
+        if (userAuthFilter === 'all') return true;
+        if (userAuthFilter === 'google') return u.oauth_provider === 'google';
+        if (userAuthFilter === 'microsoft') return u.oauth_provider === 'microsoft';
+        if (userAuthFilter === 'phone') return !u.oauth_provider && !u.email;
+        if (userAuthFilter === 'email') return !u.oauth_provider && !!u.email;
+        return true;
+    });
 
     const totalValue = products.reduce((s, p) => s + parseFloat(p.price || 0), 0);
     const categories = [...new Set(products.map(p => p.category))];
@@ -669,20 +677,32 @@ const Admin = () => {
                     {/* ── Users Tab ────────────────────────────── */}
                     {activeTab === 'users' && (
                         <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-                            <div style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)' }}>
+                            <div style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', flexWrap: 'wrap' }}>
                                 <h2 style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px', margin: 0, display: 'flex', alignItems: 'center', gap: '7px' }}>
                                     <Users size={15} style={{ color: '#8b5cf6' }} />
                                     All Users
                                     <span style={{ fontSize: '11px', padding: '1px 7px', borderRadius: '9999px', background: '#f5f3ff', color: '#8b5cf6', fontWeight: 700 }}>{filteredUsers.length}</span>
                                 </h2>
-                                <div style={{ position: 'relative' }}>
-                                    <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                                    <input
-                                        placeholder="Search users..."
-                                        value={userSearch}
-                                        onChange={(e) => setUserSearch(e.target.value)}
-                                        style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '7px 12px 7px 30px', fontSize: '12px', outline: 'none', background: 'white', width: '190px', color: '#1e293b' }}
-                                    />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <select
+                                        value={userAuthFilter}
+                                        onChange={e => setUserAuthFilter(e.target.value)}
+                                        style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '7px 10px', fontSize: '12px', outline: 'none', background: 'white', color: '#475569', cursor: 'pointer' }}>
+                                        <option value="all">All Methods</option>
+                                        <option value="email">Email</option>
+                                        <option value="phone">Phone / OTP</option>
+                                        <option value="google">Google</option>
+                                        <option value="microsoft">Microsoft</option>
+                                    </select>
+                                    <div style={{ position: 'relative' }}>
+                                        <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                        <input
+                                            placeholder="Search users..."
+                                            value={userSearch}
+                                            onChange={(e) => setUserSearch(e.target.value)}
+                                            style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '7px 12px 7px 30px', fontSize: '12px', outline: 'none', background: 'white', width: '190px', color: '#1e293b' }}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                             <div style={{ overflowX: 'auto' }}>
@@ -695,14 +715,14 @@ const Admin = () => {
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                             <tr style={{ background: '#f8fafc' }}>
-                                                {['User', 'Email', 'Role', 'Joined', 'Actions'].map((h, i) => (
-                                                    <th key={h} style={{ padding: '11px 16px', textAlign: i === 4 ? 'center' : 'left', fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.5px', textTransform: 'uppercase', borderBottom: '1px solid #f1f5f9' }}>{h}</th>
+                                                {['User', 'Contact', 'Auth Method', 'Role', 'Joined', 'Actions'].map((h, i) => (
+                                                    <th key={h} style={{ padding: '11px 16px', textAlign: i === 5 ? 'center' : 'left', fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '0.5px', textTransform: 'uppercase', borderBottom: '1px solid #f1f5f9' }}>{h}</th>
                                                 ))}
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {filteredUsers.length === 0 ? (
-                                                <tr><td colSpan={5} style={{ padding: '48px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No users found</td></tr>
+                                                <tr><td colSpan={6} style={{ padding: '48px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No users found</td></tr>
                                             ) : filteredUsers.map((u) => {
                                                 const roleConfig = u.is_admin
                                                     ? { label: 'Admin', bg: '#fef2f2', color: '#dc2626' }
@@ -710,6 +730,13 @@ const Admin = () => {
                                                         ? { label: 'Seller', bg: '#ecfdf5', color: '#059669' }
                                                         : { label: 'Customer', bg: '#eff6ff', color: '#2563eb' };
                                                 const avatarBg = u.is_admin ? 'linear-gradient(135deg, #ef4444, #dc2626)' : u.is_seller ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #6366f1, #4f46e5)';
+                                                const authMethod = u.oauth_provider === 'google'
+                                                    ? { label: 'Google', bg: '#fef9f0', color: '#d97706', border: '#fde68a' }
+                                                    : u.oauth_provider === 'microsoft'
+                                                        ? { label: 'Microsoft', bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' }
+                                                        : u.email
+                                                            ? { label: 'Email', bg: '#f8fafc', color: '#64748b', border: '#e2e8f0' }
+                                                            : { label: 'Phone / OTP', bg: '#fff7ed', color: '#c2410c', border: '#fed7aa' };
                                                 return (
                                                     <tr key={u.id} style={{ borderBottom: '1px solid #f8fafc', transition: 'background 0.15s' }}
                                                         onMouseEnter={e => e.currentTarget.style.background = '#f8faff'}
@@ -725,7 +752,17 @@ const Admin = () => {
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td style={{ padding: '12px 16px', fontSize: '13px', color: '#475569' }}>{u.email}</td>
+                                                        <td style={{ padding: '12px 16px' }}>
+                                                            {u.email && <div style={{ fontSize: '12px', color: '#475569' }}>{u.email}</div>}
+                                                            {u.phone && <div style={{ fontSize: '11px', color: '#94a3b8' }}>+91 {u.phone}</div>}
+                                                        </td>
+                                                        <td style={{ padding: '12px 16px' }}>
+                                                            <span style={{ fontSize: '11px', padding: '3px 9px', borderRadius: '9999px', fontWeight: 700, background: authMethod.bg, color: authMethod.color, border: `1px solid ${authMethod.border}`, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                {u.oauth_provider === 'google' && <span style={{ fontSize: '10px' }}>G</span>}
+                                                                {u.oauth_provider === 'microsoft' && <span style={{ fontSize: '10px' }}>M</span>}
+                                                                {authMethod.label}
+                                                            </span>
+                                                        </td>
                                                         <td style={{ padding: '12px 16px' }}>
                                                             <span style={{ fontSize: '11px', padding: '3px 9px', borderRadius: '9999px', fontWeight: 700, background: roleConfig.bg, color: roleConfig.color }}>
                                                                 {roleConfig.label}

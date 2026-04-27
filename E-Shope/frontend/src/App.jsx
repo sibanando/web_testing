@@ -11,10 +11,11 @@ const UserProfile = lazy(() => import('./pages/UserProfile'));
 const SellerDashboard = lazy(() => import('./pages/SellerDashboard'));
 const StaticPage = lazy(() => import('./pages/StaticPage'));
 const ProductDetail = lazy(() => import('./pages/ProductDetail'));
+const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
 
 function App() {
   const location = useLocation();
-  const isAdmin = location.pathname === '/admin' || location.pathname === '/seller';
+  const isAdmin = location.pathname === '/admin' || location.pathname === '/seller' || location.pathname === '/auth/callback';
 
   return (
     <>
@@ -31,6 +32,7 @@ function App() {
           <Route path="/seller" element={<SellerDashboard />} />
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/page/:slug" element={<StaticPage />} />
+          <Route path="/auth/callback" element={<OAuthCallback />} />
         </Routes>
       </Suspense>
       {!isAdmin && <Footer />}

@@ -10,6 +10,60 @@ const { verifyToken, JWT_SECRET } = require('../middleware/auth');
 // For multi-replica deployments replace with Redis (ioredis + TTL).
 const otpStore = new Map();
 
+// In-memory OAuth state store for CSRF protection
+const oauthStateStore = new Map();
+
+function generateOAuthState() {
+    const state = crypto.randomBytes(16).toString('hex');
+    oauthStateStore.set(state, { expiresAt: Date.now() + 10 * 60 * 1000 });
+    return state;
+}
+
+function verifyOAuthState(state) {
+    const stored = oauthStateStore.get(state);
+    oauthStateStore.delete(state);
+    return stored && Date.now() <= stored.expiresAt;
+}
+
+function getFrontendUrl() {
+    return (process.env.FRONTEND_URL || 'http://localhost:5555').replace(/\/$/, '');
+}
+
+function getBackendUrl() {
+    return (process.env.BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
+}
+
+async function findOrCreateOAuthUser(email, name, provider, providerId) {
+    // Prefer lookup by provider + id (handles email changes on provider side)
+    let user = (await db.query(
+        'SELECT * FROM users WHERE oauth_provider = $1 AND oauth_id = $2',
+        [provider, providerId]
+    )).rows[0];
+
+    if (!user && email) {
+        // Link OAuth to an existing email account
+        user = (await db.query('SELECT * FROM users WHERE email = $1', [email])).rows[0];
+        if (user) {
+            await db.query(
+                'UPDATE users SET oauth_provider = $1, oauth_id = $2 WHERE id = $3',
+                [provider, providerId, user.id]
+            );
+            user.oauth_provider = provider;
+            user.oauth_id = providerId;
+        }
+    }
+
+    if (!user) {
+        const { rows } = await db.query(
+            'INSERT INTO users (name, email, oauth_provider, oauth_id) VALUES ($1, $2, $3, $4) RETURNING *',
+            [name || 'User', email, provider, providerId]
+        );
+        user = rows[0];
+    }
+
+    return user;
+}
+
 function generateOtp() {
     // crypto.randomInt is cryptographically secure — never use Math.random for OTPs
     return String(crypto.randomInt(100000, 999999));
@@ -66,7 +120,12 @@ function makeToken(user) {
 }
 
 function sanitizeUser(user) {
-    return { id: user.id, name: user.name, email: user.email, phone: user.phone || null, is_admin: user.is_admin || 0, is_seller: user.is_seller || 0 };
+    return {
+        id: user.id, name: user.name, email: user.email,
+        phone: user.phone || null,
+        is_admin: user.is_admin || 0, is_seller: user.is_seller || 0,
+        oauth_provider: user.oauth_provider || null,
+    };
 }
 
 // POST /api/auth/send-otp
@@ -237,6 +296,132 @@ router.put('/profile/:id', verifyToken, async (req, res) => {
     } catch (err) {
         console.error('Profile update error:', err.message);
         res.status(500).json({ message: 'Update failed' });
+    }
+});
+
+// ── Google OAuth ──────────────────────────────────────────────────────────────
+
+// GET /api/auth/google — redirect user to Google's OAuth consent screen
+router.get('/google', (req, res) => {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+        return res.redirect(`${getFrontendUrl()}/login?oauth_error=google_not_configured`);
+    }
+    const state = generateOAuthState();
+    const params = new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        redirect_uri: `${getBackendUrl()}/api/auth/google/callback`,
+        response_type: 'code',
+        scope: 'openid email profile',
+        state,
+        access_type: 'online',
+    });
+    res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+// GET /api/auth/google/callback — exchange code, issue JWT, redirect to frontend
+router.get('/google/callback', async (req, res) => {
+    const { code, state, error } = req.query;
+    const frontendUrl = getFrontendUrl();
+
+    if (error || !code) return res.redirect(`${frontendUrl}/login?oauth_error=google_cancelled`);
+    if (!verifyOAuthState(state)) return res.redirect(`${frontendUrl}/login?oauth_error=invalid_state`);
+
+    try {
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                code,
+                client_id: process.env.GOOGLE_CLIENT_ID,
+                client_secret: process.env.GOOGLE_CLIENT_SECRET,
+                redirect_uri: `${getBackendUrl()}/api/auth/google/callback`,
+                grant_type: 'authorization_code',
+            }),
+        });
+        const tokenData = await tokenRes.json();
+        if (!tokenData.access_token) {
+            console.error('[Google OAuth] Token exchange failed:', JSON.stringify(tokenData));
+            return res.redirect(`${frontendUrl}/login?oauth_error=google_failed`);
+        }
+
+        const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` },
+        });
+        const gUser = await infoRes.json();
+        if (!gUser.email) return res.redirect(`${frontendUrl}/login?oauth_error=google_no_email`);
+
+        const user = await findOrCreateOAuthUser(gUser.email, gUser.name, 'google', gUser.sub);
+        const jwt = makeToken(user);
+        const userJson = encodeURIComponent(JSON.stringify(sanitizeUser(user)));
+        res.redirect(`${frontendUrl}/auth/callback?token=${encodeURIComponent(jwt)}&user=${userJson}`);
+    } catch (err) {
+        console.error('[Google OAuth] Error:', err.message);
+        res.redirect(`${frontendUrl}/login?oauth_error=google_failed`);
+    }
+});
+
+// ── Microsoft OAuth ───────────────────────────────────────────────────────────
+
+// GET /api/auth/microsoft — redirect user to Microsoft's OAuth consent screen
+router.get('/microsoft', (req, res) => {
+    if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET) {
+        return res.redirect(`${getFrontendUrl()}/login?oauth_error=microsoft_not_configured`);
+    }
+    const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
+    const state = generateOAuthState();
+    const params = new URLSearchParams({
+        client_id: process.env.MICROSOFT_CLIENT_ID,
+        redirect_uri: `${getBackendUrl()}/api/auth/microsoft/callback`,
+        response_type: 'code',
+        scope: 'openid email profile User.Read',
+        state,
+        response_mode: 'query',
+    });
+    res.redirect(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?${params}`);
+});
+
+// GET /api/auth/microsoft/callback — exchange code, call Graph API, issue JWT
+router.get('/microsoft/callback', async (req, res) => {
+    const { code, state, error } = req.query;
+    const frontendUrl = getFrontendUrl();
+
+    if (error || !code) return res.redirect(`${frontendUrl}/login?oauth_error=microsoft_cancelled`);
+    if (!verifyOAuthState(state)) return res.redirect(`${frontendUrl}/login?oauth_error=invalid_state`);
+
+    try {
+        const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
+        const tokenRes = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                code,
+                client_id: process.env.MICROSOFT_CLIENT_ID,
+                client_secret: process.env.MICROSOFT_CLIENT_SECRET,
+                redirect_uri: `${getBackendUrl()}/api/auth/microsoft/callback`,
+                grant_type: 'authorization_code',
+                scope: 'openid email profile User.Read',
+            }),
+        });
+        const tokenData = await tokenRes.json();
+        if (!tokenData.access_token) {
+            console.error('[Microsoft OAuth] Token exchange failed:', JSON.stringify(tokenData));
+            return res.redirect(`${frontendUrl}/login?oauth_error=microsoft_failed`);
+        }
+
+        const infoRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` },
+        });
+        const msUser = await infoRes.json();
+        const email = msUser.mail || msUser.userPrincipalName;
+        if (!email) return res.redirect(`${frontendUrl}/login?oauth_error=microsoft_no_email`);
+
+        const user = await findOrCreateOAuthUser(email, msUser.displayName, 'microsoft', msUser.id);
+        const jwt = makeToken(user);
+        const userJson = encodeURIComponent(JSON.stringify(sanitizeUser(user)));
+        res.redirect(`${frontendUrl}/auth/callback?token=${encodeURIComponent(jwt)}&user=${userJson}`);
+    } catch (err) {
+        console.error('[Microsoft OAuth] Error:', err.message);
+        res.redirect(`${frontendUrl}/login?oauth_error=microsoft_failed`);
     }
 });
 

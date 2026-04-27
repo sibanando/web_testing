@@ -7,11 +7,12 @@
 4. [Production Kubernetes (cloud)](#4-production-kubernetes-cloud)
 5. [Enabling TLS / HTTPS](#5-enabling-tls--https)
 6. [SMS OTP Setup](#6-sms-otp-setup)
-7. [Database](#7-database)
-8. [CI/CD — GitHub Actions](#8-cicd--github-actions)
-9. [After Code Changes](#9-after-code-changes)
-10. [Security Hardening](#10-security-hardening)
-11. [Production Checklist](#11-production-checklist)
+7. [OAuth Social Login Setup](#7-oauth-social-login-setup)
+8. [Database](#8-database)
+9. [CI/CD — GitHub Actions](#9-cicd--github-actions)
+10. [After Code Changes](#10-after-code-changes)
+11. [Security Hardening](#11-security-hardening)
+12. [Production Checklist](#12-production-checklist)
 
 ---
 
@@ -61,6 +62,13 @@ Copy `.env.example` to `.env` and fill in all values.
 | `DB_SSL` | `false` | `true` for RDS / Cloud SQL / Azure |
 | `NODE_ENV` | (unset) | `production` |
 | `PORT` | `5000` | Leave as-is |
+| `FRONTEND_URL` | `http://localhost:5555` | `https://yourdomain.com` |
+| `BACKEND_URL` | `http://localhost:5000` | `https://api.yourdomain.com` |
+| `GOOGLE_CLIENT_ID` | (empty — button shows "not configured") | From Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | (empty) | From Google Cloud Console |
+| `MICROSOFT_CLIENT_ID` | (empty — button shows "not configured") | From Azure App registration |
+| `MICROSOFT_CLIENT_SECRET` | (empty) | From Azure App registration |
+| `MICROSOFT_TENANT_ID` | `common` | `common` or your tenant GUID |
 
 > The backend exits at startup if `NODE_ENV=production` and `JWT_SECRET` is the default value.
 
@@ -242,7 +250,65 @@ When key is absent: `docker compose logs backend` shows the OTP.
 
 ---
 
-## 7. Database
+## 7. OAuth Social Login Setup
+
+Users can sign in with **Google (Gmail)** or **Microsoft (Outlook/Work)** accounts. The flow uses the server-side Authorization Code grant — no extra npm packages required.
+
+Both buttons degrade gracefully: if the credentials are absent they redirect back to `/login` with a readable error message. No crashes, no blank screens.
+
+### Google OAuth
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) → **APIs & Services → Credentials**
+2. **Create credentials → OAuth 2.0 Client ID** → Application type: **Web application**
+3. Add to **Authorised redirect URIs**:
+   - Dev: `http://localhost:5000/api/auth/google/callback`
+   - Prod: `https://api.yourdomain.com/api/auth/google/callback`
+4. Copy **Client ID** and **Client secret** into `.env`:
+   ```
+   GOOGLE_CLIENT_ID=your_client_id
+   GOOGLE_CLIENT_SECRET=your_client_secret
+   ```
+5. Also enable the **Google People API** (or **OAuth2 API**) on the project.
+
+### Microsoft OAuth (Outlook / Work accounts)
+
+1. Go to [portal.azure.com](https://portal.azure.com) → **Microsoft Entra ID → App registrations → New registration**
+2. Name: `ApniDunia` — Supported account types: **Accounts in any organisational directory and personal Microsoft accounts**
+3. **Redirect URI** → Platform: **Web**:
+   - Dev: `http://localhost:5000/api/auth/microsoft/callback`
+   - Prod: `https://api.yourdomain.com/api/auth/microsoft/callback`
+4. After creation, go to **Certificates & secrets → New client secret** — copy the value immediately
+5. Copy into `.env`:
+   ```
+   MICROSOFT_CLIENT_ID=your_application_id
+   MICROSOFT_CLIENT_SECRET=your_secret_value
+   MICROSOFT_TENANT_ID=common
+   ```
+   Use `common` to accept both personal and work/school accounts. Replace with a specific tenant GUID to restrict to one organisation.
+
+### Production-only variables
+
+These default to localhost in dev — only required for production:
+```
+FRONTEND_URL=https://yourdomain.com
+BACKEND_URL=https://api.yourdomain.com
+```
+
+The OAuth callback URLs registered in Google/Microsoft consoles must match `BACKEND_URL/api/auth/{google,microsoft}/callback` exactly.
+
+### How account linking works
+
+| Scenario | Result |
+|----------|--------|
+| New email via OAuth | New Customer account created |
+| Email already exists (registered via email/password) | OAuth credentials linked to existing account |
+| Same provider + account used again | Existing account found by `(provider, oauth_id)` — no duplicate |
+| New OAuth user is a seller | Admin must upgrade from Users tab in Admin panel |
+
+---
+
+## 8. Database
+
 
 ### Auto-schema (CREATE TABLE IF NOT EXISTS on every start)
 
@@ -277,7 +343,7 @@ kubectl rollout restart deployment/postgres -n apnidunia
 
 ---
 
-## 8. CI/CD — GitHub Actions
+## 9. CI/CD — GitHub Actions
 
 `.github/workflows/ci.yml` runs on push to `main` / `develop` and on PRs to `main`:
 
@@ -293,7 +359,7 @@ Uncomment the `publish` job in `.github/workflows/ci.yml`. It uses `GITHUB_TOKEN
 
 ---
 
-## 9. After Code Changes
+## 10. After Code Changes
 
 ### Docker Compose
 ```bash
@@ -314,7 +380,7 @@ kubectl rollout restart deployment/frontend -n apnidunia
 
 ---
 
-## 10. Security Hardening
+## 11. Security Hardening
 
 ### Vulnerabilities fixed (as of commit 623e823)
 
@@ -340,7 +406,7 @@ These require infrastructure changes rather than code changes:
   ```
   Then pass a `store` option to each `rateLimit()` call in `index.js`.
 
-- **OTP store is in-memory** — doesn't survive pod restarts, doesn't sync across replicas. Replace `otpStore` Map in `authRoute.js` with Redis + TTL:
+- **OTP / OAuth state stores are in-memory** — neither survives pod restarts nor syncs across replicas. Replace both `otpStore` and `oauthStateStore` Maps in `authRoute.js` with Redis + TTL:
   ```js
   await redis.set(`otp:${phone}`, otp, 'EX', 300); // 5-min TTL
   ```
@@ -373,7 +439,7 @@ docker run --rm -v $(pwd)/backend:/app -w /app node:20-alpine npm audit
 
 ---
 
-## 11. Production Checklist
+## 12. Production Checklist
 
 ### Security
 - [ ] `JWT_SECRET` changed (`openssl rand -hex 64`)
@@ -401,6 +467,13 @@ docker run --rm -v $(pwd)/backend:/app -w /app node:20-alpine npm audit
 - [ ] OTP store migrated from in-memory Map to Redis (required for HA)
 - [ ] Real payment gateway integrated (Razorpay for India)
 - [ ] Demo credentials removed or rotated in production seed
+
+### OAuth Social Login
+- [ ] `FRONTEND_URL` and `BACKEND_URL` set to production HTTPS URLs
+- [ ] Google OAuth: `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` set; redirect URI `https://api.yourdomain.com/api/auth/google/callback` registered in Google Cloud Console
+- [ ] Microsoft OAuth: `MICROSOFT_CLIENT_ID` + `MICROSOFT_CLIENT_SECRET` + `MICROSOFT_TENANT_ID` set; redirect URI registered in Azure App Registration
+- [ ] OAuth state store migrated from in-memory Map to Redis (required for HA; prevents CSRF across pod restarts)
+- [ ] Verified account linking works as expected for existing email users
 
 ### Observability
 - [ ] `morgan combined` logs flowing to a log aggregator

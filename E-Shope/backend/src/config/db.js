@@ -82,6 +82,10 @@ const initDb = async () => {
         END $$;
     `);
 
+    // Add OAuth columns for Google / Microsoft social login
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id TEXT`);
+
     // Add indexes for frequently queried columns
     await pool.query(`
         CREATE INDEX IF NOT EXISTS idx_products_category  ON products(category);

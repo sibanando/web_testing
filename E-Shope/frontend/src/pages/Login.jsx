@@ -1,8 +1,42 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, User, Mail, Lock, ArrowRight, ShoppingBag, Store, Phone, Shield } from 'lucide-react';
 import useResponsive from '../hooks/useResponsive';
+
+const BACKEND_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
+
+const GoogleIcon = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+    </svg>
+);
+
+const MicrosoftIcon = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+        <rect x="1" y="1" width="10.5" height="10.5" fill="#F25022"/>
+        <rect x="12.5" y="1" width="10.5" height="10.5" fill="#7FBA00"/>
+        <rect x="1" y="12.5" width="10.5" height="10.5" fill="#00A4EF"/>
+        <rect x="12.5" y="12.5" width="10.5" height="10.5" fill="#FFB900"/>
+    </svg>
+);
+
+const OAUTH_ERRORS = {
+    google_not_configured: 'Google login is not set up on this server yet',
+    microsoft_not_configured: 'Microsoft login is not set up on this server yet',
+    google_cancelled: 'Google sign-in was cancelled',
+    microsoft_cancelled: 'Microsoft sign-in was cancelled',
+    google_failed: 'Google sign-in failed — please try again',
+    microsoft_failed: 'Microsoft sign-in failed — please try again',
+    google_no_email: 'Could not retrieve email from Google — check your Google account permissions',
+    microsoft_no_email: 'Could not retrieve email from Microsoft — check your account permissions',
+    invalid_state: 'Security check failed — please try signing in again',
+    missing_token: 'Authentication failed — please try again',
+    invalid_response: 'Unexpected response from authentication server',
+};
 
 const Login = () => {
     const location = useLocation();
@@ -33,6 +67,15 @@ const Login = () => {
 
     const { login, register, sendOtp, verifyOtp } = useAuth();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const oauthError = searchParams.get('oauth_error');
+        if (oauthError) setError(OAUTH_ERRORS[oauthError] || 'OAuth sign-in failed — please try again');
+    }, []);
+
+    const handleOAuthLogin = (provider) => {
+        window.location.href = `${BACKEND_URL}/api/auth/${provider}`;
+    };
 
     const startTimer = () => {
         setOtpTimer(30);
@@ -161,6 +204,40 @@ const Login = () => {
         setDevOtp(null);
         setOtp(['', '', '', '', '', '']);
     };
+
+    const renderOAuthButtons = () => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '4px 0' }}>
+                <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.1)' }} />
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>or continue with</span>
+                <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.1)' }} />
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" onClick={() => handleOAuthLogin('google')}
+                    style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                        padding: '11px 12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)',
+                        background: 'rgba(255,255,255,0.06)', color: '#f0f0f0', cursor: 'pointer',
+                        fontSize: '13px', fontWeight: 600, transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.22)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}>
+                    <GoogleIcon /> Google
+                </button>
+                <button type="button" onClick={() => handleOAuthLogin('microsoft')}
+                    style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                        padding: '11px 12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)',
+                        background: 'rgba(255,255,255,0.06)', color: '#f0f0f0', cursor: 'pointer',
+                        fontSize: '13px', fontWeight: 600, transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.22)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}>
+                    <MicrosoftIcon /> Microsoft
+                </button>
+            </div>
+        </div>
+    );
 
     const getInputStyle = (field) => ({
         width: '100%',
@@ -631,6 +708,8 @@ const Login = () => {
                             </button>
                         </form>
                     )}
+
+                    {renderOAuthButtons()}
 
                     <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.25)', lineHeight: 1.6, margin: '16px 0 0', textAlign: 'center' }}>
                         By continuing, you agree to our{' '}

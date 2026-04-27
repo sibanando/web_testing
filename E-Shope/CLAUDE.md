@@ -41,7 +41,7 @@ backend/
   src/config/db.js          # Pool, initDb() — schema + seed (CREATE IF NOT EXISTS)
   src/middleware/auth.js    # verifyToken, requireAdmin — single source of JWT logic
   src/routes/
-    authRoute.js            # register, login, OTP (crypto.randomInt), profile
+    authRoute.js            # register, login, OTP (crypto.randomInt), profile, Google/Microsoft OAuth
     adminRoute.js           # admin CRUD — requires verifyToken + requireAdmin
     sellerRoute.js          # seller CRUD — requires verifySeller middleware
     orderRoute.js           # create order + server-side pricing + stock decrement (pg transaction)
@@ -52,7 +52,7 @@ backend/
 frontend/src/
   main.jsx                  # Root — wraps app in ErrorBoundary + providers
   App.jsx                   # Lazy routes + Suspense fallback
-  context/AuthContext.jsx   # JWT state, login/register/OTP helpers
+  context/AuthContext.jsx   # JWT state, login/register/OTP/loginWithToken helpers
   context/CartContext.jsx   # Cart in localStorage
   hooks/useResponsive.js    # Debounced resize → isMobile/isTablet/isDesktop
   components/
@@ -64,9 +64,10 @@ frontend/src/
     Home.jsx                # Carousel, category grid, deal countdown
     Cart.jsx                # Per-product discount, delivery address
     Checkout.jsx            # Leaflet map, UPI QR polling, order creation
-    Admin.jsx               # Admin-only (frontend + backend guarded)
+    Admin.jsx               # Admin-only; users tab shows auth method + filter
     SellerDashboard.jsx     # Seller-only (frontend + backend guarded)
-    Login.jsx               # OTP login (Fast2SMS), email/password login
+    Login.jsx               # Email/password, Mobile OTP, Google, Microsoft login
+    OAuthCallback.jsx       # /auth/callback — stores JWT from OAuth redirect, navigates home
 
 k8s/
   *.yaml                    # Kubernetes manifests (namespace apnidunia)
@@ -90,6 +91,10 @@ k8s/
 - **Rate limiting** — `express-rate-limit` applied globally (200 req/15 min), tighter on auth (20/15 min), and OTP send+verify (3/min each). In-memory store only — use `rate-limit-redis` for multi-replica K8s.
 - **Graceful shutdown** — SIGTERM/SIGINT handlers close the HTTP server cleanly before exit.
 - **Upload restriction** — `/api/upload` requires `verifyToken` + is_seller or is_admin. Regular customers cannot upload files.
+- **Google/Microsoft OAuth** — Authorization Code Flow via `GET /api/auth/google` and `GET /api/auth/microsoft`. No extra npm packages; uses Node's built-in `fetch` to exchange the code and call the provider's userinfo endpoint. A random 16-byte state parameter (in-memory Map) guards against CSRF. After verifying user identity the backend issues our JWT and redirects to `FRONTEND_URL/auth/callback?token=...&user=...`. The `OAuthCallback.jsx` page reads those params, stores them, and navigates to home or `/seller`.
+- **OAuth account linking** — `findOrCreateOAuthUser()` first checks by `(oauth_provider, oauth_id)`, then by email. If a matching email already exists the OAuth credentials are linked to that account silently; no duplicate users are created.
+- **OAuth state store** — same in-memory Map pattern as OTP store (`oauthStateStore`). Replace with Redis for multi-replica K8s.
+- **OAuth graceful degradation** — if `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (or Microsoft equivalents) are absent, clicking the button redirects back to `/login?oauth_error=..._not_configured` with a friendly message rather than crashing.
 
 ## Security Rules
 
@@ -111,6 +116,8 @@ k8s/
 
 - **Rate limiter is in-memory** — doesn't sync across K8s replicas. Add `rate-limit-redis` for horizontal scaling.
 - **OTP store is in-memory** — doesn't survive restarts or sync across replicas. Replace with Redis + TTL for HA.
+- **OAuth state store is in-memory** — same as OTP store; replace with Redis for HA.
+- **OAuth token in redirect URL** — `FRONTEND_URL/auth/callback?token=JWT` exposes the token in browser history. Acceptable for demo; production should use a short-lived one-time code exchange instead.
 - **CSP disabled** — `contentSecurityPolicy: false` in helmet config. Enable and tune for hardened production.
 - **Payment is mock** — integrate Razorpay or Cashfree for real transactions.
 
@@ -126,6 +133,13 @@ Copy `.env.example` to `.env` for local overrides. Docker Compose reads `.env` a
 | `ALLOWED_ORIGINS` | (open) | Set to your domain(s) |
 | `FAST2SMS_API_KEY` | (empty → console log) | Get free key at fast2sms.com |
 | `DB_SSL` | false | `true` for managed cloud DBs |
+| `FRONTEND_URL` | `http://localhost:5555` | Set to production frontend origin |
+| `BACKEND_URL` | `http://localhost:5000` | Set to production backend origin |
+| `GOOGLE_CLIENT_ID` | (empty → button shows "not configured" error) | console.cloud.google.com |
+| `GOOGLE_CLIENT_SECRET` | (empty) | console.cloud.google.com |
+| `MICROSOFT_CLIENT_ID` | (empty → button shows "not configured" error) | portal.azure.com App registration |
+| `MICROSOFT_CLIENT_SECRET` | (empty) | portal.azure.com |
+| `MICROSOFT_TENANT_ID` | `common` | `common` for personal+work, or tenant GUID |
 
 ## Database Patterns
 
@@ -143,6 +157,21 @@ client.release();
 // Indexes exist on: products.category, products.seller_id,
 //   orders.user_id, order_items.order_id, order_items.product_id
 ```
+
+### users table columns
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | SERIAL PK | |
+| `name` | TEXT NOT NULL | |
+| `email` | TEXT UNIQUE | nullable (phone-only users) |
+| `phone` | TEXT UNIQUE | nullable (email-only users) |
+| `password` | TEXT | nullable for OAuth-only accounts |
+| `is_admin` | INTEGER (0/1) | |
+| `is_seller` | INTEGER (0/1) | |
+| `oauth_provider` | TEXT | `'google'` or `'microsoft'`; null for email/phone accounts |
+| `oauth_id` | TEXT | provider's unique user ID (`sub` for Google, `id` for Microsoft) |
+| `created_at` | TIMESTAMP | |
 
 ## Running Locally
 
@@ -179,3 +208,6 @@ docker compose logs -f frontend
 - Login page reads `?tab=register&seller=1` to pre-select register+seller mode.
 - After a `docker compose up --build`, do a **hard refresh** (`Ctrl+Shift+R`) to clear the browser's cached `index.html`. The nginx `no-cache` header on `index.html` prevents this in normal usage; old tabs may still need a refresh.
 - The ErrorBoundary auto-reloads once on stale-chunk errors (uses `sessionStorage` flag to avoid loops).
+- OAuth users registered via Google/Microsoft get `password = NULL` in the DB. Do not attempt `bcrypt.compareSync` on their password — the login route will correctly reject an empty password field. Admins can set a password from the Admin panel if needed.
+- New OAuth users register as **Customer** (`is_seller = 0`) by default. Admin must upgrade them to Seller from the Users tab if required.
+- The `BACKEND_URL` / `FRONTEND_URL` env vars default to localhost in dev. In production both must be set to the public HTTPS URLs, and those URLs must be registered as authorised redirect URIs in the Google/Microsoft developer consoles.
