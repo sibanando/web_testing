@@ -80,6 +80,25 @@ router.post('/', verifyToken, async (req, res) => {
         const user = { id: req.user.id, name: req.user.name, email: req.user.email };
         sendOrderConfirmation(user, order, resolvedItems).catch(() => {});
 
+        // CRM: award loyalty points (1 pt per ₹10) + notification
+        const { addLoyaltyPoints, createNotification } = require('../utils/crm');
+        const pts = Math.floor(serverTotal / 10);
+        if (pts > 0) {
+            addLoyaltyPoints(req.user.id, pts, 'order_earn', order.id, `Order #${order.id}`).catch(() => {});
+            createNotification(
+                req.user.id, 'points_earned',
+                `${pts} loyalty points earned!`,
+                `You earned ${pts} points for your ₹${Math.round(serverTotal)} order.`,
+                '/profile?tab=loyalty'
+            ).catch(() => {});
+        }
+        createNotification(
+            req.user.id, 'order_placed',
+            'Order placed successfully!',
+            `Order #${order.id} is confirmed. Total: ₹${Math.round(serverTotal)}.`,
+            '/profile?tab=orders'
+        ).catch(() => {});
+
         res.status(201).json({
             orderId: order.id,
             status: 'Paid',

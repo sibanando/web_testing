@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Star, ShoppingCart, Zap, Shield, RefreshCw, Truck, ChevronRight, Store, Settings } from 'lucide-react';
+import { Star, ShoppingCart, Zap, Shield, RefreshCw, Truck, ChevronRight, Store, Settings, Heart, MessageCircle } from 'lucide-react';
 import api from '../services/api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useWishlist } from '../context/WishlistContext';
 
 const ProductDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { addToCart } = useCart();
     const { user } = useAuth();
+    const { wishlistIds, toggleWishlist } = useWishlist();
     const isShopRole = user?.is_admin === 1 || user?.is_seller === 1;
 
     const [product, setProduct] = useState(null);
@@ -20,20 +22,30 @@ const ProductDetail = () => {
     const [added, setAdded] = useState(false);
     const [qty, setQty] = useState(1);
 
+    // Reviews
+    const [reviewData, setReviewData] = useState(null);
+    const [canReview, setCanReview] = useState(null);
+    const [reviewForm, setReviewForm] = useState({ rating: 5, title: '', body: '' });
+    const [reviewMsg, setReviewMsg] = useState(null);
+    const [wishToggling, setWishToggling] = useState(false);
+
     useEffect(() => {
         setLoading(true);
         setSelectedImg(0);
+        setReviewData(null);
+        setCanReview(null);
         api.get(`/products/${id}`)
             .then(r => {
                 setProduct(r.data);
-                // fetch related by category
                 api.get(`/products?category=${encodeURIComponent(r.data.category)}`)
                     .then(res => setRelated((res.data || []).filter(p => p.id !== r.data.id).slice(0, 5)))
                     .catch(() => {});
             })
             .catch(() => navigate('/'))
             .finally(() => setLoading(false));
-    }, [id]);
+        api.get(`/reviews/product/${id}`).then(r => setReviewData(r.data)).catch(() => {});
+        if (user) api.get(`/reviews/can-review/${id}`).then(r => setCanReview(r.data)).catch(() => {});
+    }, [id, user]);
 
     if (loading) return (
         <div style={{ background: '#f1f3f6', minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -259,6 +271,133 @@ const ProductDetail = () => {
                             <div>
                                 <p style={{ fontSize: '13px', fontWeight: 700, color: '#212121', marginBottom: '8px' }}>Description</p>
                                 <p style={{ fontSize: '13px', color: '#444', lineHeight: 1.8, margin: 0 }}>{product.description}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Reviews Section */}
+                <div style={{ background: 'white', borderRadius: '2px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflow: 'hidden', marginBottom: '16px' }}>
+                    <div style={{ padding: '14px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#212121', margin: 0 }}>Ratings &amp; Reviews</h2>
+                            {reviewData?.stats && (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#388e3c', color: 'white', fontSize: '13px', fontWeight: 700, padding: '3px 8px', borderRadius: '3px' }}>
+                                    {parseFloat(reviewData.stats.avg_rating || 0).toFixed(1)} <Star size={10} fill="white" />
+                                </span>
+                            )}
+                            {reviewData?.stats?.total > 0 && <span style={{ fontSize: '13px', color: '#878787' }}>{reviewData.stats.total} reviews</span>}
+                        </div>
+                        {/* Wishlist button */}
+                        {!isShopRole && (
+                            <button onClick={async () => {
+                                if (!user) { navigate('/login'); return; }
+                                setWishToggling(true);
+                                await toggleWishlist(parseInt(id));
+                                setWishToggling(false);
+                            }} disabled={wishToggling}
+                                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', border: `1.5px solid ${wishlistIds?.has(parseInt(id)) ? '#E85D04' : '#e0e0e0'}`, borderRadius: '4px', background: wishlistIds?.has(parseInt(id)) ? '#FFF5EB' : 'white', color: wishlistIds?.has(parseInt(id)) ? '#E85D04' : '#666', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                                <Heart size={15} fill={wishlistIds?.has(parseInt(id)) ? '#E85D04' : 'none'} color={wishlistIds?.has(parseInt(id)) ? '#E85D04' : '#666'} />
+                                {wishlistIds?.has(parseInt(id)) ? 'Wishlisted' : 'Wishlist'}
+                            </button>
+                        )}
+                    </div>
+
+                    <div style={{ padding: '16px 20px' }}>
+                        {/* Rating distribution */}
+                        {reviewData?.distribution?.length > 0 && (
+                            <div style={{ display: 'flex', gap: '24px', marginBottom: '20px', alignItems: 'flex-start' }}>
+                                <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                                    <p style={{ fontSize: '48px', fontWeight: 800, color: '#212121', lineHeight: 1, margin: '0 0 4px' }}>{parseFloat(reviewData?.stats?.avg_rating||0).toFixed(1)}</p>
+                                    <p style={{ fontSize: '12px', color: '#878787', margin: 0 }}>{reviewData?.stats?.total||0} ratings</p>
+                                </div>
+                                <div style={{ flex: 1, maxWidth: '300px' }}>
+                                    {[5,4,3,2,1].map(r => {
+                                        const d = reviewData.distribution.find(d => parseInt(d.rating) === r);
+                                        const cnt = parseInt(d?.count||0);
+                                        const total = parseInt(reviewData?.stats?.total||0);
+                                        const pct = total > 0 ? (cnt/total)*100 : 0;
+                                        return (
+                                            <div key={r} style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'4px' }}>
+                                                <span style={{ fontSize:'12px', color:'#212121', width:'10px', textAlign:'right' }}>{r}</span>
+                                                <Star size={11} fill="#f59e0b" color="#f59e0b" />
+                                                <div style={{ flex:1, height:'8px', background:'#f0f0f0', borderRadius:'4px', overflow:'hidden' }}>
+                                                    <div style={{ height:'100%', width:`${pct}%`, background:'#388e3c', borderRadius:'4px' }} />
+                                                </div>
+                                                <span style={{ fontSize:'11px', color:'#878787', width:'24px' }}>{cnt}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Write review */}
+                        {user && !isShopRole && canReview?.can && (
+                            <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '16px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
+                                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#212121', margin: '0 0 12px' }}>
+                                    Write a Review {canReview.is_verified_buyer && <span style={{ fontSize:'11px', color:'#388e3c', fontWeight:600 }}>(Verified Purchase)</span>}
+                                </h3>
+                                {reviewMsg && <div style={{ padding:'8px 12px', borderRadius:'6px', fontSize:'12px', marginBottom:'10px', background: reviewMsg.ok?'#ecfdf5':'#fef2f2', color: reviewMsg.ok?'#059669':'#dc2626' }}>{reviewMsg.text}</div>}
+                                <div style={{ display:'flex', gap:'4px', marginBottom:'12px' }}>
+                                    {[1,2,3,4,5].map(s => (
+                                        <button key={s} onClick={() => setReviewForm(p=>({...p,rating:s}))}
+                                            style={{ background:'none', border:'none', cursor:'pointer', padding:'2px', fontSize:'22px', color: reviewForm.rating >= s ? '#f59e0b' : '#e0e0e0', lineHeight:1 }}>
+                                            ★
+                                        </button>
+                                    ))}
+                                </div>
+                                <input value={reviewForm.title} onChange={e => setReviewForm(p=>({...p,title:e.target.value}))} placeholder="Title (optional)"
+                                    style={{ width:'100%', padding:'8px 12px', border:'1px solid #e2e8f0', borderRadius:'6px', fontSize:'13px', marginBottom:'8px', outline:'none', boxSizing:'border-box', color:'#212121' }} />
+                                <textarea value={reviewForm.body} onChange={e => setReviewForm(p=>({...p,body:e.target.value}))} placeholder="Share your experience with this product…" rows={3}
+                                    style={{ width:'100%', padding:'8px 12px', border:'1px solid #e2e8f0', borderRadius:'6px', fontSize:'13px', marginBottom:'10px', outline:'none', resize:'vertical', boxSizing:'border-box', fontFamily:'inherit', color:'#212121' }} />
+                                <button onClick={async () => {
+                                    setReviewMsg(null);
+                                    try {
+                                        await api.post('/reviews', { product_id: parseInt(id), rating: reviewForm.rating, title: reviewForm.title, body: reviewForm.body });
+                                        setReviewMsg({ ok:true, text:'Review submitted! You earned 50 loyalty points.' });
+                                        setCanReview({ can:false, reason:'already_reviewed' });
+                                        const r = await api.get(`/reviews/product/${id}`);
+                                        setReviewData(r.data);
+                                    } catch(err) {
+                                        setReviewMsg({ ok:false, text: err.response?.data?.message || 'Failed to submit review' });
+                                    }
+                                }} style={{ padding:'9px 20px', background:'linear-gradient(135deg,#E85D04,#FB8500)', color:'white', border:'none', borderRadius:'6px', fontSize:'13px', fontWeight:700, cursor:'pointer' }}>
+                                    Submit Review
+                                </button>
+                            </div>
+                        )}
+                        {user && !isShopRole && canReview?.reason === 'already_reviewed' && (
+                            <div style={{ padding:'10px 14px', background:'#ecfdf5', borderRadius:'6px', fontSize:'13px', color:'#059669', fontWeight:600, marginBottom:'16px' }}>
+                                You have already reviewed this product. Thank you!
+                            </div>
+                        )}
+
+                        {/* Review list */}
+                        {reviewData?.reviews?.length > 0 ? (
+                            <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+                                {reviewData.reviews.map(rev => (
+                                    <div key={rev.id} style={{ borderBottom:'1px solid #f0f0f0', paddingBottom:'12px' }}>
+                                        <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px' }}>
+                                            <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'linear-gradient(135deg,#fbbf24,#f97316)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:800, color:'white' }}>
+                                                {rev.user_name?.charAt(0).toUpperCase()}
+                                            </div>
+                                            <span style={{ fontSize:'13px', fontWeight:600, color:'#212121' }}>{rev.user_name}</span>
+                                            {rev.is_verified_buyer ? <span style={{ fontSize:'10px', padding:'1px 6px', borderRadius:'9999px', background:'#ecfdf5', color:'#059669', fontWeight:700 }}>Verified</span> : null}
+                                            <span style={{ display:'inline-flex', alignItems:'center', gap:'3px', background:'#388e3c', color:'white', fontSize:'11px', fontWeight:700, padding:'2px 6px', borderRadius:'3px', marginLeft:'auto' }}>
+                                                {rev.rating} <Star size={9} fill="white" />
+                                            </span>
+                                        </div>
+                                        {rev.title && <p style={{ fontSize:'13px', fontWeight:700, color:'#212121', margin:'0 0 4px' }}>{rev.title}</p>}
+                                        {rev.body && <p style={{ fontSize:'13px', color:'#444', margin:'0 0 6px', lineHeight:1.6 }}>{rev.body}</p>}
+                                        <p style={{ fontSize:'11px', color:'#878787', margin:0 }}>{new Date(rev.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{ textAlign:'center', padding:'32px 0', color:'#878787', fontSize:'13px' }}>
+                                <MessageCircle size={32} color="#e0e0e0" style={{ marginBottom:'8px' }} />
+                                <p style={{ margin:0 }}>No reviews yet. {user && !isShopRole && canReview?.can ? 'Be the first to review!' : ''}</p>
                             </div>
                         )}
                     </div>

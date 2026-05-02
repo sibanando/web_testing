@@ -119,9 +119,14 @@ app.use('/api/seller',   require('./src/routes/sellerRoute'));
 app.use('/api/payment',  require('./src/routes/paymentRoute'));
 app.use('/api/upload',   require('./src/routes/uploadRoute'));
 app.use('/api/subscribe',require('./src/routes/subscribeRoute'));
-app.use('/api/track',    require('./src/routes/trackRoute'));
-app.use('/api/returns',  require('./src/routes/returnRoute'));
-app.use('/api/delivery', require('./src/routes/deliveryRoute'));
+app.use('/api/track',         require('./src/routes/trackRoute'));
+app.use('/api/returns',       require('./src/routes/returnRoute'));
+app.use('/api/delivery',      require('./src/routes/deliveryRoute'));
+app.use('/api/wishlist',      require('./src/routes/wishlistRoute'));
+app.use('/api/reviews',       require('./src/routes/reviewRoute'));
+app.use('/api/tickets',       require('./src/routes/ticketRoute'));
+app.use('/api/notifications', require('./src/routes/notificationRoute'));
+app.use('/api/loyalty',       require('./src/routes/loyaltyRoute'));
 
 // ── Health / readiness probes ─────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));

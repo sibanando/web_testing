@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { Star, ShoppingCart, Check } from 'lucide-react';
+import { useWishlist } from '../context/WishlistContext';
+import { Star, ShoppingCart, Check, Heart } from 'lucide-react';
 
 const ProductCard = ({ product, compact = false }) => {
     const { addToCart } = useCart();
     const { user } = useAuth();
+    const { wishlistIds, toggleWishlist } = useWishlist();
+    const navigate = useNavigate();
     const [adding, setAdding] = useState(false);
+    const [wishToggling, setWishToggling] = useState(false);
     const [showAddedMsg, setShowAddedMsg] = useState(false);
 
     const isShopRole = user?.is_admin === 1 || user?.is_seller === 1;
@@ -20,6 +24,17 @@ const ProductCard = ({ product, compact = false }) => {
         setShowAddedMsg(true);
         setTimeout(() => { setAdding(false); setShowAddedMsg(false); }, 1500);
     };
+
+    const handleWishlist = async (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (!user) { navigate('/login'); return; }
+        setWishToggling(true);
+        await toggleWishlist(product.id);
+        setWishToggling(false);
+    };
+
+    const isWishlisted = wishlistIds?.has(product.id);
 
     const getProductImage = () => {
         try {
@@ -86,6 +101,14 @@ const ProductCard = ({ product, compact = false }) => {
                     <span style={{ position: 'absolute', top: '10px', left: '10px', background: 'linear-gradient(135deg, #dc2626, #f97316)', color: 'white', fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '5px', boxShadow: '0 2px 8px rgba(220,38,38,0.35)' }}>
                         {discount}% OFF
                     </span>
+                )}
+
+                {/* Wishlist heart */}
+                {!isShopRole && (
+                    <button onClick={handleWishlist} disabled={wishToggling}
+                        style={{ position: 'absolute', top: '8px', right: '8px', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'white', borderRadius: '50%', border: 'none', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', zIndex: 2 }}>
+                        <Heart size={14} color={isWishlisted ? '#E85D04' : '#94a3b8'} fill={isWishlisted ? '#E85D04' : 'none'} />
+                    </button>
                 )}
 
                 {showAddedMsg && (

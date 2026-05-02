@@ -14,6 +14,7 @@ const ProductDetail = lazy(() => import('./pages/ProductDetail'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
 const TrackOrder    = lazy(() => import('./pages/TrackOrder'));
 const AgentTracker  = lazy(() => import('./pages/AgentTracker'));
+const Wishlist      = lazy(() => import('./pages/Wishlist'));
 
 function App() {
   const location = useLocation();
@@ -37,6 +38,7 @@ function App() {
           <Route path="/auth/callback" element={<OAuthCallback />} />
           <Route path="/track/:token" element={<TrackOrder />} />
           <Route path="/agent" element={<AgentTracker />} />
+          <Route path="/wishlist" element={<Wishlist />} />
         </Routes>
       </Suspense>
       {!isAdmin && <Footer />}

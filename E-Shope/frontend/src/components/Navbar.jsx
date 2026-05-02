@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { ShoppingCart, Search, ChevronDown, User, Settings, Store, LogOut, Menu, X } from 'lucide-react';
+import { ShoppingCart, Search, ChevronDown, User, Settings, Store, LogOut, Menu, X, Bell, Heart } from 'lucide-react';
 import useResponsive from '../hooks/useResponsive';
+import api from '../services/api';
 
 const Navbar = () => {
     const { items } = useCart();
@@ -16,6 +17,39 @@ const Navbar = () => {
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showMobileMenu, setShowMobileMenu] = useState(false);
     const [showMobileSearch, setShowMobileSearch] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [showNotifs, setShowNotifs] = useState(false);
+    const notifRef = useRef(null);
+
+    useEffect(() => {
+        if (!user) { setNotifications([]); setUnreadCount(0); return; }
+        const fetch = () => api.get('/notifications').then(r => {
+            setNotifications(r.data.notifications || []);
+            setUnreadCount(r.data.unread || 0);
+        }).catch(() => {});
+        fetch();
+        const t = setInterval(fetch, 60000);
+        return () => clearInterval(t);
+    }, [user]);
+
+    useEffect(() => {
+        const handler = (e) => { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifs(false); };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    const markAllRead = async () => {
+        await api.put('/notifications/read-all').catch(() => {});
+        setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+        setUnreadCount(0);
+    };
+
+    const markOneRead = async (id) => {
+        await api.put(`/notifications/${id}/read`).catch(() => {});
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
+        setUnreadCount(prev => Math.max(0, prev - 1));
+    };
 
     const isAdmin = location.pathname === '/admin' || location.pathname === '/seller';
 
@@ -121,6 +155,14 @@ const Navbar = () => {
                                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                                 <User size={15} color="#E85D04" /> My Account
                                             </Link>
+                                            {user.is_admin !== 1 && user.is_seller !== 1 && (
+                                                <Link to="/wishlist" onClick={() => setShowUserMenu(false)}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', fontSize: '13px', color: '#374151', textDecoration: 'none', borderBottom: '1px solid #f3f4f6' }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = '#fff5eb'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                    <Heart size={15} color="#E85D04" /> Wishlist
+                                                </Link>
+                                            )}
                                             <button onClick={() => { logout(); setShowUserMenu(false); }}
                                                 style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '12px 16px', fontSize: '13px', color: '#dc2626', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                                                 onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
@@ -137,6 +179,55 @@ const Navbar = () => {
                                 </Link>
                             )}
                         </div>
+                    )}
+
+                    {/* Notification bell — logged-in customers on desktop */}
+                    {!isMobile && user && user.is_admin !== 1 && (
+                        <div style={{ position: 'relative' }} ref={notifRef}>
+                            <button onClick={() => { setShowNotifs(!showNotifs); setShowUserMenu(false); }}
+                                style={{ position: 'relative', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: '6px', padding: '7px 10px', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center' }}>
+                                <Bell size={16} />
+                                {unreadCount > 0 && (
+                                    <span style={{ position: 'absolute', top: '-5px', right: '-5px', background: '#E85D04', color: 'white', fontSize: '10px', fontWeight: 800, borderRadius: '50%', width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                    </span>
+                                )}
+                            </button>
+                            {showNotifs && (
+                                <div style={{ position: 'absolute', right: 0, marginTop: '8px', width: '320px', background: 'white', boxShadow: '0 12px 40px rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px solid #e2e8f0', zIndex: 100, overflow: 'hidden' }}>
+                                    <div style={{ padding: '12px 16px', background: '#1C1917', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <span style={{ color: 'white', fontWeight: 700, fontSize: '13px' }}>Notifications</span>
+                                        {unreadCount > 0 && <button onClick={markAllRead} style={{ fontSize: '11px', color: '#FB8500', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Mark all read</button>}
+                                    </div>
+                                    <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
+                                        {notifications.length === 0 ? (
+                                            <p style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No notifications yet</p>
+                                        ) : notifications.map(n => (
+                                            <div key={n.id} onClick={() => { markOneRead(n.id); if (n.link) navigate(n.link); setShowNotifs(false); }}
+                                                style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: n.is_read ? 'white' : '#FFF5EB', display: 'flex', gap: '10px', alignItems: 'flex-start' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'white' : '#FFF5EB'}>
+                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: n.is_read ? 'transparent' : '#E85D04', flexShrink: 0, marginTop: '5px' }} />
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <p style={{ fontSize: '12px', fontWeight: 700, color: '#1e293b', margin: '0 0 2px' }}>{n.title}</p>
+                                                    {n.body && <p style={{ fontSize: '11px', color: '#64748b', margin: 0, lineHeight: 1.4 }}>{n.body}</p>}
+                                                    <p style={{ fontSize: '10px', color: '#94a3b8', margin: '3px 0 0' }}>{new Date(n.created_at).toLocaleDateString('en-IN')}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Wishlist — desktop, logged-in customers */}
+                    {!isMobile && !isTablet && user && user.is_admin !== 1 && user.is_seller !== 1 && (
+                        <Link to="/wishlist" style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'rgba(255,255,255,0.8)', textDecoration: 'none', fontSize: '13px', fontWeight: 500 }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#fbbf24'}
+                            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}>
+                            <Heart size={16} /> Wishlist
+                        </Link>
                     )}
 
                     {/* Admin + Seller buttons — desktop only */}

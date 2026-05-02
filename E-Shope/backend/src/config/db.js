@@ -189,6 +189,98 @@ const initDb = async () => {
     await pool.query(`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS otp_verified        INTEGER DEFAULT 0`);
     await pool.query(`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS delivery_notes      TEXT`);
 
+    // ─── CRM tables ───────────────────────────────────────────────────────────
+
+    // Wishlists
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS wishlists (
+            id         SERIAL PRIMARY KEY,
+            user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(user_id, product_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_wishlists_user ON wishlists(user_id);
+    `);
+
+    // Product reviews
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS product_reviews (
+            id                SERIAL PRIMARY KEY,
+            product_id        INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            rating            INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+            title             TEXT,
+            body              TEXT,
+            is_verified_buyer INTEGER DEFAULT 0,
+            is_approved       INTEGER DEFAULT 1,
+            created_at        TIMESTAMP DEFAULT NOW(),
+            UNIQUE(product_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_reviews_product ON product_reviews(product_id);
+        CREATE INDEX IF NOT EXISTS idx_reviews_user    ON product_reviews(user_id);
+    `);
+
+    // Support tickets
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS support_tickets (
+            id         SERIAL PRIMARY KEY,
+            user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            order_id   INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+            subject    TEXT NOT NULL,
+            category   TEXT DEFAULT 'general',
+            status     TEXT DEFAULT 'open',
+            priority   TEXT DEFAULT 'medium',
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_tickets_user   ON support_tickets(user_id);
+        CREATE INDEX IF NOT EXISTS idx_tickets_status ON support_tickets(status);
+    `);
+
+    // Ticket messages
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS ticket_messages (
+            id         SERIAL PRIMARY KEY,
+            ticket_id  INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+            sender_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            is_admin   INTEGER DEFAULT 0,
+            body       TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_ticket_messages_ticket ON ticket_messages(ticket_id);
+    `);
+
+    // Notifications
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS notifications (
+            id         SERIAL PRIMARY KEY,
+            user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            type       TEXT NOT NULL,
+            title      TEXT NOT NULL,
+            body       TEXT,
+            link       TEXT,
+            is_read    INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_notifications_user   ON notifications(user_id);
+        CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read);
+    `);
+
+    // Loyalty points ledger
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS loyalty_ledger (
+            id           SERIAL PRIMARY KEY,
+            user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            points       INTEGER NOT NULL,
+            type         TEXT NOT NULL,
+            reference_id INTEGER,
+            note         TEXT,
+            created_at   TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_loyalty_user ON loyalty_ledger(user_id);
+    `);
+
     // Ensure order_items cascade on order delete (idempotent via constraint name check)
     await pool.query(`
         DO $$ BEGIN
