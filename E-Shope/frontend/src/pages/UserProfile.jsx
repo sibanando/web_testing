@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { User, ShoppingBag, Lock, Edit2, Check, X, Eye, EyeOff, Package, LogOut, MapPin, Calendar, CreditCard } from 'lucide-react';
+import { User, ShoppingBag, Lock, Edit2, Check, X, Eye, EyeOff, Package, LogOut, MapPin, Calendar, CreditCard, Truck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 
 const UserProfile = () => {
@@ -393,6 +394,27 @@ const UserProfile = () => {
                                                                 <MapPin size={12} style={{ flexShrink: 0 }} />
                                                                 {order.address}
                                                             </p>
+                                                        )}
+                                                        {order.tracking_token && (
+                                                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b' }}>
+                                                                    <Truck size={13} style={{ color: '#E85D04' }} />
+                                                                    <span>
+                                                                        {order.delivery_status
+                                                                            ? order.delivery_status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                                                                            : 'Dispatched'}
+                                                                    </span>
+                                                                    {order.estimated_delivery && (
+                                                                        <span style={{ color: '#94a3b8' }}>
+                                                                            · ETA {new Date(order.estimated_delivery).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <Link to={`/track/${order.tracking_token}`}
+                                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 14px', background: 'linear-gradient(135deg, #E85D04, #FB8500)', color: 'white', borderRadius: '7px', fontSize: '12px', fontWeight: 700, textDecoration: 'none' }}>
+                                                                    <Truck size={12} /> Track Order
+                                                                </Link>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>

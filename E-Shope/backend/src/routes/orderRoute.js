@@ -105,12 +105,16 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
 
         const { rows } = await db.query(`
             SELECT o.*,
-                STRING_AGG(p.name || ' x' || oi.quantity, ', ') as items_summary
+                STRING_AGG(DISTINCT p.name || ' x' || oi.quantity, ', ') as items_summary,
+                d.tracking_token,
+                d.status  AS delivery_status,
+                d.estimated_delivery
             FROM orders o
             LEFT JOIN order_items oi ON o.id = oi.order_id
             LEFT JOIN products p ON oi.product_id = p.id
+            LEFT JOIN deliveries d ON d.order_id = o.id
             WHERE o.user_id = $1
-            GROUP BY o.id
+            GROUP BY o.id, d.tracking_token, d.status, d.estimated_delivery
             ORDER BY o.created_at DESC
         `, [requestedId]);
         res.json(rows);
