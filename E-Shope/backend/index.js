@@ -22,14 +22,18 @@ if (process.env.NODE_ENV === 'production') {
 
 const db = require('./src/config/db');
 const { initDb } = require('./src/config/db');
+const { initBucket } = require('./src/config/storage');
+
+// Redis is optional — loaded here so it connects early and warms the pool
+require('./src/config/redis');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ── Security headers ─────────────────────────────────────────────────────────
 app.use(helmet({
-    crossOriginEmbedderPolicy: false, // allow images from external URLs
-    contentSecurityPolicy: false,     // SPA — CSP is managed at nginx level
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: false,
 }));
 
 // ── Request logging ──────────────────────────────────────────────────────────
@@ -42,7 +46,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 app.use(cors({
     origin: (origin, callback) => {
-        if (!allowedOrigins) return callback(null, true); // open in dev/staging
+        if (!allowedOrigins) return callback(null, true);
         if (!origin || allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
@@ -55,16 +59,33 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// ── Rate limiters ─────────────────────────────────────────────────────────────
-const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 min
+// ── Rate limiters (Redis-backed when available, in-memory otherwise) ──────────
+function makeRateLimiter(opts) {
+    const { redisClient } = require('./src/config/redis');
+    let store;
+    if (redisClient) {
+        try {
+            const { RedisStore } = require('rate-limit-redis');
+            // ioredis: client.call(command, ...args) — spread the args array
+            store = new RedisStore({
+                sendCommand: (command, ...args) => redisClient.call(command, ...args),
+            });
+        } catch (err) {
+            console.warn('[RateLimit] Redis store init failed, using in-memory:', err.message);
+        }
+    }
+    return rateLimit({ ...opts, store });
+}
+
+const apiLimiter = makeRateLimiter({
+    windowMs: 15 * 60 * 1000,
     max: 200,
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: 'Too many requests, please try again later.' },
 });
 
-const authLimiter = rateLimit({
+const authLimiter = makeRateLimiter({
     windowMs: 15 * 60 * 1000,
     max: 20,
     standardHeaders: true,
@@ -72,8 +93,8 @@ const authLimiter = rateLimit({
     message: { message: 'Too many auth attempts, please try again in 15 minutes.' },
 });
 
-const otpLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 min
+const otpLimiter = makeRateLimiter({
+    windowMs: 60 * 1000,
     max: 3,
     standardHeaders: true,
     legacyHeaders: false,
@@ -86,18 +107,21 @@ app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/send-otp', otpLimiter);
 app.use('/api/auth/verify-otp', otpLimiter);
 
-// ── Static uploads ────────────────────────────────────────────────────────────
+// ── Static uploads (fallback when MinIO is not configured) ────────────────────
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use('/api/auth',    require('./src/routes/authRoute'));
-app.use('/api/products',require('./src/routes/productRoute'));
-app.use('/api/orders',  require('./src/routes/orderRoute'));
-app.use('/api/admin',   require('./src/routes/adminRoute'));
-app.use('/api/seller',  require('./src/routes/sellerRoute'));
-app.use('/api/payment', require('./src/routes/paymentRoute'));
-app.use('/api/upload',     require('./src/routes/uploadRoute'));
-app.use('/api/subscribe', require('./src/routes/subscribeRoute'));
+app.use('/api/auth',     require('./src/routes/authRoute'));
+app.use('/api/products', require('./src/routes/productRoute'));
+app.use('/api/orders',   require('./src/routes/orderRoute'));
+app.use('/api/admin',    require('./src/routes/adminRoute'));
+app.use('/api/seller',   require('./src/routes/sellerRoute'));
+app.use('/api/payment',  require('./src/routes/paymentRoute'));
+app.use('/api/upload',   require('./src/routes/uploadRoute'));
+app.use('/api/subscribe',require('./src/routes/subscribeRoute'));
+app.use('/api/track',    require('./src/routes/trackRoute'));
+app.use('/api/returns',  require('./src/routes/returnRoute'));
+app.use('/api/delivery', require('./src/routes/deliveryRoute'));
 
 // ── Health / readiness probes ─────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -107,7 +131,8 @@ app.get('/ready', async (_req, res) => {
         await db.query('SELECT 1');
         res.json({ status: 'ready', db: 'ok' });
     } catch (err) {
-        res.status(503).json({ status: 'not ready', db: err.message });
+        console.error('DB readiness check error:', err.message);
+        res.status(503).json({ status: 'not ready', db: 'unavailable' });
     }
 });
 
@@ -117,7 +142,8 @@ app.get('/', async (_req, res) => {
         const { rows } = await db.query('SELECT COUNT(*) as cnt FROM products');
         res.json({ status: 'ApniDunia API running', db: 'PostgreSQL', products: parseInt(rows[0].cnt) });
     } catch (err) {
-        res.status(500).json({ status: 'error', message: err.message });
+        console.error('Info endpoint error:', err.message);
+        res.status(500).json({ status: 'error', message: 'Internal server error' });
     }
 });
 
@@ -136,6 +162,7 @@ let server;
 const start = async () => {
     try {
         await initDb();
+        await initBucket(); // no-op when MINIO_ENDPOINT is not set
         server = app.listen(PORT, () => {
             console.log(`ApniDunia API running on http://localhost:${PORT}`);
             console.log('PostgreSQL connected and schema ready');
@@ -154,7 +181,6 @@ const shutdown = (signal) => {
             console.log('HTTP server closed.');
             process.exit(0);
         });
-        // Force-kill if not closed within 10 s
         setTimeout(() => { console.error('Force shutdown.'); process.exit(1); }, 10000);
     } else {
         process.exit(0);

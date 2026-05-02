@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const { verifyToken, requireAdmin } = require('../middleware/auth');
+const { safeDelPattern } = require('../config/redis');
 
 // All admin routes require a valid JWT AND is_admin flag
 const adminGuard = [verifyToken, requireAdmin];
@@ -73,6 +74,7 @@ router.put('/products/:id', adminGuard, async (req, res) => {
             [name, parseFloat(price), description, category,
              images || '[]', parseInt(discount) || 0, parseInt(stock) || 0, id]
         );
+        await safeDelPattern('products:list:*');
         res.json({ message: 'Product updated successfully' });
     } catch (err) {
         console.error('Edit product error:', err.message);
@@ -85,6 +87,7 @@ router.delete('/products/:id', adminGuard, async (req, res) => {
     try {
         await db.query('DELETE FROM order_items WHERE product_id = $1', [req.params.id]);
         await db.query('DELETE FROM products WHERE id = $1', [req.params.id]);
+        await safeDelPattern('products:list:*');
         res.json({ message: 'Product deleted' });
     } catch (err) {
         res.status(500).json({ message: 'Failed to delete product' });

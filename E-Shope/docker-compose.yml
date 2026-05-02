@@ -19,23 +19,84 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-apnidunia}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-apnidunia_minio_2024}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
   backend:
     build: ./backend
     ports:
       - "5000:5000"
     environment:
+      - NODE_ENV=${NODE_ENV:-production}
       - JWT_SECRET=${JWT_SECRET:-apnidunia_secret_2024}
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-apnidunia_pg_2024}@postgres:5432/apnidunia
       - PORT=5000
       - FAST2SMS_API_KEY=${FAST2SMS_API_KEY:-}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5555}
+      - BACKEND_URL=${BACKEND_URL:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID:-}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET:-}
+      - MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID:-common}
+      # Redis
+      - REDIS_URL=redis://redis:6379
+      # MinIO / object storage
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-apnidunia}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-apnidunia_minio_2024}
+      - MINIO_BUCKET=${MINIO_BUCKET:-apnidunia}
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-http://localhost:9000}
+      # Email (optional — set SMTP_HOST to enable)
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-ApniDunia <noreply@apnidunia.com>}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       app-network:
         aliases:
-          - backend-service   # matches nginx.conf and K8s service name
+          - backend-service
     restart: unless-stopped
 
   frontend:
@@ -51,9 +112,22 @@ services:
       - app-network
     restart: unless-stopped
 
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    ports:
+      - "3001:3001"
+    volumes:
+      - uptime_data:/app/data
+    networks:
+      - app-network
+    restart: unless-stopped
+
 networks:
   app-network:
     driver: bridge
 
 volumes:
   pg_data:
+  redis_data:
+  minio_data:
+  uptime_data:

@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const { verifyToken } = require('../middleware/auth');
+const { safeDelPattern } = require('../config/redis');
 
 // Middleware: verify JWT and require is_seller or is_admin
 const verifySeller = (req, res, next) => {
@@ -22,7 +23,8 @@ router.get('/products', verifySeller, async (req, res) => {
         );
         res.json(rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Seller get products error:', err.message);
+        res.status(500).json({ message: 'Failed to fetch products' });
     }
 });
 
@@ -39,10 +41,11 @@ router.post('/products', verifySeller, async (req, res) => {
             [name, parseFloat(price), description || '', category || 'General', imgStr,
              parseInt(discount) || 0, parseInt(stock) || 100, req.user.id]
         );
+        await safeDelPattern('products:list:*');
         res.status(201).json(rows[0]);
     } catch (err) {
         console.error('Seller create product error:', err.message);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ message: 'Failed to create product' });
     }
 });
 
@@ -65,10 +68,11 @@ router.put('/products/:id', verifySeller, async (req, res) => {
              typeof images === 'string' ? images : JSON.stringify(images || []),
              parseInt(discount) || 0, parseInt(stock) || 0, id]
         );
+        await safeDelPattern('products:list:*');
         res.json({ message: 'Product updated successfully' });
     } catch (err) {
         console.error('Seller update product error:', err.message);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ message: 'Failed to update product' });
     }
 });
 
@@ -82,9 +86,11 @@ router.delete('/products/:id', verifySeller, async (req, res) => {
             return res.status(403).json({ message: 'You can only delete your own products' });
 
         await db.query('DELETE FROM products WHERE id = $1', [id]);
+        await safeDelPattern('products:list:*');
         res.json({ message: 'Product deleted' });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Seller delete product error:', err.message);
+        res.status(500).json({ message: 'Failed to delete product' });
     }
 });
 
@@ -149,7 +155,8 @@ router.get('/stats', verifySeller, async (req, res) => {
             revenue: parseFloat(revenue.rows[0].total),
         });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Seller stats error:', err.message);
+        res.status(500).json({ message: 'Failed to fetch stats' });
     }
 });
 

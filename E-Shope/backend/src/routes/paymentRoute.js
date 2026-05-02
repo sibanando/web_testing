@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth');
-
-// In-memory payment session store (demo only)
-const paymentSessions = new Map();
+const pss = require('../config/paymentSessions');
 
 // POST /api/payment/upi-qr  — generate UPI deep-link for QR code
 router.post('/upi-qr', verifyToken, (req, res) => {
@@ -16,8 +14,7 @@ router.post('/upi-qr', verifyToken, (req, res) => {
     const transactionNote = `Order payment of Rs ${amount}`;
     const qrString = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(merchantName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
 
-    // Store payment session — stays pending until user confirms via /payment/confirm
-    paymentSessions.set(paymentId, {
+    pss.sessions.set(paymentId, {
         amount,
         status: 'pending',
         createdAt: Date.now(),
@@ -25,35 +22,28 @@ router.post('/upi-qr', verifyToken, (req, res) => {
         transactionId: `TXN${Date.now()}`,
     });
 
-    // Auto-expire after 10 minutes — never auto-succeed
+    // Auto-expire after 1 minute — never auto-succeed
     setTimeout(() => {
-        const session = paymentSessions.get(paymentId);
+        const session = pss.sessions.get(paymentId);
         if (session && session.status === 'pending') {
             session.status = 'expired';
         }
-        setTimeout(() => paymentSessions.delete(paymentId), 60000);
-    }, 10 * 60 * 1000);
+        setTimeout(() => pss.sessions.delete(paymentId), 60000);
+    }, 1 * 60 * 1000);
 
-    res.json({
-        qrString,
-        upiId,
-        amount,
-        merchantName,
-        paymentId
-    });
+    res.json({ qrString, upiId, amount, merchantName, paymentId });
 });
 
 // POST /api/payment/confirm  — user clicks "I've Paid", start bank verification
 router.post('/confirm', verifyToken, (req, res) => {
     const { paymentId } = req.body;
-    const session = paymentSessions.get(paymentId);
+    const session = pss.sessions.get(paymentId);
     if (!session) return res.status(404).json({ status: 'expired', message: 'Payment session expired or not found' });
     if (session.status === 'expired') return res.status(400).json({ status: 'expired', message: 'QR code has expired. Please generate a new one.' });
     if (session.status === 'processing' || session.status === 'success') {
         return res.json({ status: session.status, message: 'Verification already in progress' });
     }
 
-    // Move to processing — simulate bank webhook arriving after user completes payment in app (8-14s)
     session.status = 'processing';
     session.transactionId = `TXN${Date.now()}`;
 
@@ -67,6 +57,9 @@ router.post('/confirm', verifyToken, (req, res) => {
             } else {
                 session.status = 'success';
                 session.verifiedAt = new Date().toISOString();
+                // Register in verified map so orderRoute can validate once
+                pss.verified.set(session.transactionId, { amount: session.amount, method: session.method, verifiedAt: session.verifiedAt });
+                setTimeout(() => pss.verified.delete(session.transactionId), 10 * 60 * 1000);
             }
         }
     }, delay);
@@ -76,7 +69,7 @@ router.post('/confirm', verifyToken, (req, res) => {
 
 // GET /api/payment/status/:paymentId  — poll payment status
 router.get('/status/:paymentId', verifyToken, (req, res) => {
-    const session = paymentSessions.get(req.params.paymentId);
+    const session = pss.sessions.get(req.params.paymentId);
     if (!session) {
         return res.json({ status: 'expired', message: 'Payment session not found or expired' });
     }
@@ -93,23 +86,28 @@ router.get('/status/:paymentId', verifyToken, (req, res) => {
     if (session.status === 'success') {
         response.transactionId = session.transactionId;
         response.verifiedAt = session.verifiedAt;
-        setTimeout(() => paymentSessions.delete(req.params.paymentId), 60000);
+        setTimeout(() => pss.sessions.delete(req.params.paymentId), 60000);
     } else if (session.status === 'failed') {
         response.message = session.message || 'Payment failed';
-        setTimeout(() => paymentSessions.delete(req.params.paymentId), 60000);
+        setTimeout(() => pss.sessions.delete(req.params.paymentId), 60000);
     }
 
     res.json(response);
 });
 
-// POST /api/payment/verify  — legacy direct verify (kept for PhonePe/GPay)
+// POST /api/payment/verify  — legacy verify: registers the transaction for order validation
 router.post('/verify', verifyToken, (req, res) => {
     const { transactionId, amount, method } = req.body;
+    if (!transactionId || !amount) {
+        return res.status(400).json({ message: 'transactionId and amount are required' });
+    }
 
     setTimeout(() => {
+        pss.verified.set(transactionId, { amount, method: method || 'UPI', verifiedAt: new Date().toISOString() });
+        setTimeout(() => pss.verified.delete(transactionId), 10 * 60 * 1000);
         res.json({
             status: 'success',
-            transactionId: transactionId || `TXN${Date.now()}`,
+            transactionId,
             amount,
             method: method || 'UPI',
             timestamp: new Date().toISOString()
@@ -119,11 +117,14 @@ router.post('/verify', verifyToken, (req, res) => {
 
 // POST /api/payment/phonepe  — PhonePe deep-link
 router.post('/phonepe', verifyToken, (req, res) => {
-    const { amount, phone } = req.body;
+    const { amount } = req.body;
     setTimeout(() => {
+        const transactionId = 'PH-' + Date.now();
+        pss.verified.set(transactionId, { amount, method: 'PhonePe', verifiedAt: new Date().toISOString() });
+        setTimeout(() => pss.verified.delete(transactionId), 10 * 60 * 1000);
         res.json({
             status: 'success',
-            transactionId: 'PH-' + Date.now(),
+            transactionId,
             method: 'PhonePe',
             deepLink: `phonepe://pay?pa=sibanando.nayak@ybl&pn=ApniDunia&am=${amount}&cu=INR`
         });
@@ -134,9 +135,12 @@ router.post('/phonepe', verifyToken, (req, res) => {
 router.post('/gpay', verifyToken, (req, res) => {
     const { amount } = req.body;
     setTimeout(() => {
+        const transactionId = 'GP-' + Date.now();
+        pss.verified.set(transactionId, { amount, method: 'GPay', verifiedAt: new Date().toISOString() });
+        setTimeout(() => pss.verified.delete(transactionId), 10 * 60 * 1000);
         res.json({
             status: 'success',
-            transactionId: 'GP-' + Date.now(),
+            transactionId,
             method: 'GPay',
             deepLink: `tez://upi/pay?pa=sibanando.nayak@ybl&pn=ApniDunia&am=${amount}&cu=INR`
         });

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { verifyToken } = require('../middleware/auth');
+const { sendOrderConfirmation } = require('../services/emailService');
+const pss = require('../config/paymentSessions');
 
 // POST /api/orders — create order with items (transactional)
 router.post('/', verifyToken, async (req, res) => {
@@ -12,7 +14,6 @@ router.post('/', verifyToken, async (req, res) => {
             return res.status(400).json({ message: 'Items are required' });
         }
 
-        // Validate each item has a positive integer quantity
         for (const item of items) {
             const qty = parseInt(item.quantity);
             if (!item.id || !qty || qty < 1 || qty > 100) {
@@ -27,7 +28,7 @@ router.post('/', verifyToken, async (req, res) => {
         const resolvedItems = [];
         for (const item of items) {
             const { rows } = await client.query(
-                'SELECT id, price, stock FROM products WHERE id = $1',
+                'SELECT id, name, price, stock FROM products WHERE id = $1',
                 [item.id]
             );
             const product = rows[0];
@@ -41,7 +42,18 @@ router.post('/', verifyToken, async (req, res) => {
                 return res.status(400).json({ message: `Insufficient stock for product ${item.id}` });
             }
             serverTotal += product.price * qty;
-            resolvedItems.push({ id: product.id, quantity: qty, price: product.price });
+            resolvedItems.push({ id: product.id, name: product.name, quantity: qty, price: product.price });
+        }
+
+        // Validate payment session before committing the order
+        const digitalMethods = ['UPI', 'PhonePe', 'GPay', 'Card', 'NetBanking'];
+        if (digitalMethods.includes(paymentMethod || 'UPI')) {
+            const txn = transactionId ? pss.verified.get(transactionId) : null;
+            if (!txn) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ message: 'Payment not verified. Complete payment before placing order.' });
+            }
+            pss.verified.delete(transactionId);
         }
 
         const { rows } = await client.query(
@@ -56,7 +68,6 @@ router.post('/', verifyToken, async (req, res) => {
                 'INSERT INTO order_items (order_id, product_id, quantity, price) VALUES ($1, $2, $3, $4)',
                 [order.id, item.id, item.quantity, item.price]
             );
-            // Decrement stock; clamp at 0
             await client.query(
                 'UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2',
                 [item.quantity, item.id]
@@ -64,6 +75,11 @@ router.post('/', verifyToken, async (req, res) => {
         }
 
         await client.query('COMMIT');
+
+        // Send confirmation email asynchronously — don't block the response
+        const user = { id: req.user.id, name: req.user.name, email: req.user.email };
+        sendOrderConfirmation(user, order, resolvedItems).catch(() => {});
+
         res.status(201).json({
             orderId: order.id,
             status: 'Paid',
@@ -80,7 +96,6 @@ router.post('/', verifyToken, async (req, res) => {
 });
 
 // GET /api/orders/user/:userId — user order history
-// Users can only see their own orders; admins can see any
 router.get('/user/:userId', verifyToken, async (req, res) => {
     try {
         const requestedId = parseInt(req.params.userId);

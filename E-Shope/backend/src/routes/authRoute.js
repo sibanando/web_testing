@@ -5,43 +5,79 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const db = require('../config/db');
 const { verifyToken, JWT_SECRET } = require('../middleware/auth');
+const { isConnected, safeGet, safeSet, safeDel } = require('../config/redis');
 
-// In-memory OTP store: { phone: { otp, expiresAt } }
-// For multi-replica deployments replace with Redis (ioredis + TTL).
-const otpStore = new Map();
+// In-memory fallback stores (used when Redis is unavailable)
+const _otpMemory = new Map();
+const _oauthMemory = new Map();
 
-// In-memory OAuth state store for CSRF protection
-const oauthStateStore = new Map();
+// ── OTP store (Redis-backed, in-memory fallback) ──────────────────────────────
 
-function generateOAuthState() {
+async function storeOtp(phone, otp) {
+    const saved = await safeSet(`otp:${phone}`, otp, 300); // 5 min TTL
+    if (!saved) _otpMemory.set(phone, { otp, expiresAt: Date.now() + 5 * 60 * 1000 });
+}
+
+async function getAndClearOtp(phone) {
+    if (isConnected()) {
+        const otp = await safeGet(`otp:${phone}`);
+        await safeDel(`otp:${phone}`);
+        return otp ? { otp, valid: true } : null;
+    }
+    const entry = _otpMemory.get(phone);
+    _otpMemory.delete(phone);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) return { otp: null, valid: false };
+    return { otp: entry.otp, valid: true };
+}
+
+// ── OAuth state store (Redis-backed, in-memory fallback) ──────────────────────
+
+function generateOAuthState(frontendUrl, backendUrl) {
     const state = crypto.randomBytes(16).toString('hex');
-    oauthStateStore.set(state, { expiresAt: Date.now() + 10 * 60 * 1000 });
+    const payload = JSON.stringify({ frontendUrl, backendUrl, expiresAt: Date.now() + 10 * 60 * 1000 });
+    safeSet(`oauth_state:${state}`, payload, 600).then(saved => {
+        if (!saved) _oauthMemory.set(state, JSON.parse(payload));
+    });
     return state;
 }
 
-function verifyOAuthState(state) {
-    const stored = oauthStateStore.get(state);
-    oauthStateStore.delete(state);
-    return stored && Date.now() <= stored.expiresAt;
+async function consumeOAuthState(state) {
+    // Try Redis first (works regardless of isConnected — safeGet returns null on failure)
+    const raw = await safeGet(`oauth_state:${state}`);
+    if (raw) {
+        await safeDel(`oauth_state:${state}`);
+        const data = JSON.parse(raw);
+        if (Date.now() > data.expiresAt) return null;
+        return { frontendUrl: data.frontendUrl, backendUrl: data.backendUrl };
+    }
+
+    // Fall back to in-memory (handles case where Redis was unavailable during generate)
+    const stored = _oauthMemory.get(state);
+    _oauthMemory.delete(state);
+    if (!stored || Date.now() > stored.expiresAt) return null;
+    return { frontendUrl: stored.frontendUrl, backendUrl: stored.backendUrl };
 }
 
-function getFrontendUrl() {
-    return (process.env.FRONTEND_URL || 'http://localhost:5555').replace(/\/$/, '');
+function deriveFrontendUrl(_req) {
+    if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL.replace(/\/$/, '');
+    console.warn('[OAuth] FRONTEND_URL not set — using localhost fallback for OAuth redirects');
+    return 'http://localhost:5555';
 }
 
-function getBackendUrl() {
-    return (process.env.BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
+function deriveBackendUrl(_req) {
+    if (process.env.BACKEND_URL) return process.env.BACKEND_URL.replace(/\/$/, '');
+    console.warn('[OAuth] BACKEND_URL not set — using localhost fallback for OAuth callbacks');
+    return 'http://localhost:5000';
 }
 
 async function findOrCreateOAuthUser(email, name, provider, providerId) {
-    // Prefer lookup by provider + id (handles email changes on provider side)
     let user = (await db.query(
         'SELECT * FROM users WHERE oauth_provider = $1 AND oauth_id = $2',
         [provider, providerId]
     )).rows[0];
 
     if (!user && email) {
-        // Link OAuth to an existing email account
         user = (await db.query('SELECT * FROM users WHERE email = $1', [email])).rows[0];
         if (user) {
             await db.query(
@@ -65,16 +101,13 @@ async function findOrCreateOAuthUser(email, name, provider, providerId) {
 }
 
 function generateOtp() {
-    // crypto.randomInt is cryptographically secure — never use Math.random for OTPs
     return String(crypto.randomInt(100000, 999999));
 }
 
-// Sends OTP via Fast2SMS (free Indian SMS gateway). Returns true on success.
 async function sendVisFast2SMS(phone, otp) {
     const apiKey = process.env.FAST2SMS_API_KEY;
     if (!apiKey) return false;
     try {
-        // Try OTP route first; fall back to Quick SMS if OTP route needs verification
         const otpRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
             method: 'POST',
             headers: { authorization: apiKey, 'Content-Type': 'application/json' },
@@ -86,7 +119,6 @@ async function sendVisFast2SMS(phone, otp) {
             return true;
         }
 
-        // OTP route requires DLT verification — try Quick SMS route
         const qRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
             method: 'POST',
             headers: { authorization: apiKey, 'Content-Type': 'application/json' },
@@ -137,7 +169,7 @@ router.post('/send-otp', async (req, res) => {
         }
 
         const otp = generateOtp();
-        otpStore.set(phone, { otp, expiresAt: Date.now() + 5 * 60 * 1000 });
+        await storeOtp(phone, otp);
 
         const smsSent = await sendVisFast2SMS(phone, otp);
         if (!smsSent) {
@@ -146,12 +178,9 @@ router.post('/send-otp', async (req, res) => {
             console.log(`==============================\n`);
         }
 
-        const isDev = process.env.NODE_ENV !== 'production';
-        // In dev, always return the OTP so login works regardless of SMS delivery status
         res.json({
             message: 'OTP sent successfully',
             via: smsSent ? 'sms' : 'console',
-            ...(isDev ? { dev_otp: otp } : {}),
         });
     } catch (err) {
         console.error('Send OTP error:', err.message);
@@ -159,7 +188,7 @@ router.post('/send-otp', async (req, res) => {
     }
 });
 
-// POST /api/auth/verify-otp — login or auto-register via phone+OTP
+// POST /api/auth/verify-otp
 router.post('/verify-otp', async (req, res) => {
     try {
         const { phone, otp } = req.body;
@@ -167,22 +196,17 @@ router.post('/verify-otp', async (req, res) => {
             return res.status(400).json({ message: 'Phone and OTP are required' });
         }
 
-        const stored = otpStore.get(phone);
-        if (!stored) {
+        const result = await getAndClearOtp(phone);
+        if (!result) {
             return res.status(401).json({ message: 'OTP not found. Please request a new one' });
         }
-        if (Date.now() > stored.expiresAt) {
-            otpStore.delete(phone);
+        if (!result.valid) {
             return res.status(401).json({ message: 'OTP has expired. Please request a new one' });
         }
-        if (stored.otp !== otp) {
-            // Invalidate on wrong guess — prevents brute-force within the validity window
-            otpStore.delete(phone);
+        if (result.otp !== otp) {
             return res.status(401).json({ message: 'Invalid OTP. Please request a new one' });
         }
-        otpStore.delete(phone);
 
-        // Find or create user by phone
         let user = (await db.query('SELECT * FROM users WHERE phone = $1', [phone])).rows[0];
         if (!user) {
             const { rows } = await db.query(
@@ -259,8 +283,7 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// PUT /api/auth/profile/:id — update name, email, optionally password
-// Requires authentication; users can only update their own profile (admins can update any)
+// PUT /api/auth/profile/:id
 router.put('/profile/:id', verifyToken, async (req, res) => {
     try {
         const { id } = req.params;
@@ -301,15 +324,16 @@ router.put('/profile/:id', verifyToken, async (req, res) => {
 
 // ── Google OAuth ──────────────────────────────────────────────────────────────
 
-// GET /api/auth/google — redirect user to Google's OAuth consent screen
 router.get('/google', (req, res) => {
+    const frontendUrl = deriveFrontendUrl(req);
+    const backendUrl = deriveBackendUrl(req);
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-        return res.redirect(`${getFrontendUrl()}/login?oauth_error=google_not_configured`);
+        return res.redirect(`${frontendUrl}/login?oauth_error=google_not_configured`);
     }
-    const state = generateOAuthState();
+    const state = generateOAuthState(frontendUrl, backendUrl);
     const params = new URLSearchParams({
         client_id: process.env.GOOGLE_CLIENT_ID,
-        redirect_uri: `${getBackendUrl()}/api/auth/google/callback`,
+        redirect_uri: `${backendUrl}/api/auth/google/callback`,
         response_type: 'code',
         scope: 'openid email profile',
         state,
@@ -318,13 +342,14 @@ router.get('/google', (req, res) => {
     res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
 });
 
-// GET /api/auth/google/callback — exchange code, issue JWT, redirect to frontend
 router.get('/google/callback', async (req, res) => {
     const { code, state, error } = req.query;
-    const frontendUrl = getFrontendUrl();
+    const stateData = await consumeOAuthState(state);
+    const frontendUrl = stateData?.frontendUrl || deriveFrontendUrl(req);
+    const backendUrl = stateData?.backendUrl || deriveBackendUrl(req);
 
     if (error || !code) return res.redirect(`${frontendUrl}/login?oauth_error=google_cancelled`);
-    if (!verifyOAuthState(state)) return res.redirect(`${frontendUrl}/login?oauth_error=invalid_state`);
+    if (!stateData) return res.redirect(`${frontendUrl}/login?oauth_error=invalid_state`);
 
     try {
         const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -334,7 +359,7 @@ router.get('/google/callback', async (req, res) => {
                 code,
                 client_id: process.env.GOOGLE_CLIENT_ID,
                 client_secret: process.env.GOOGLE_CLIENT_SECRET,
-                redirect_uri: `${getBackendUrl()}/api/auth/google/callback`,
+                redirect_uri: `${backendUrl}/api/auth/google/callback`,
                 grant_type: 'authorization_code',
             }),
         });
@@ -351,9 +376,9 @@ router.get('/google/callback', async (req, res) => {
         if (!gUser.email) return res.redirect(`${frontendUrl}/login?oauth_error=google_no_email`);
 
         const user = await findOrCreateOAuthUser(gUser.email, gUser.name, 'google', gUser.sub);
-        const jwt = makeToken(user);
+        const jwtToken = makeToken(user);
         const userJson = encodeURIComponent(JSON.stringify(sanitizeUser(user)));
-        res.redirect(`${frontendUrl}/auth/callback?token=${encodeURIComponent(jwt)}&user=${userJson}`);
+        res.redirect(`${frontendUrl}/auth/callback?token=${encodeURIComponent(jwtToken)}&user=${userJson}`);
     } catch (err) {
         console.error('[Google OAuth] Error:', err.message);
         res.redirect(`${frontendUrl}/login?oauth_error=google_failed`);
@@ -362,16 +387,17 @@ router.get('/google/callback', async (req, res) => {
 
 // ── Microsoft OAuth ───────────────────────────────────────────────────────────
 
-// GET /api/auth/microsoft — redirect user to Microsoft's OAuth consent screen
 router.get('/microsoft', (req, res) => {
+    const frontendUrl = deriveFrontendUrl(req);
+    const backendUrl = deriveBackendUrl(req);
     if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET) {
-        return res.redirect(`${getFrontendUrl()}/login?oauth_error=microsoft_not_configured`);
+        return res.redirect(`${frontendUrl}/login?oauth_error=microsoft_not_configured`);
     }
     const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
-    const state = generateOAuthState();
+    const state = generateOAuthState(frontendUrl, backendUrl);
     const params = new URLSearchParams({
         client_id: process.env.MICROSOFT_CLIENT_ID,
-        redirect_uri: `${getBackendUrl()}/api/auth/microsoft/callback`,
+        redirect_uri: `${backendUrl}/api/auth/microsoft/callback`,
         response_type: 'code',
         scope: 'openid email profile User.Read',
         state,
@@ -380,13 +406,14 @@ router.get('/microsoft', (req, res) => {
     res.redirect(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?${params}`);
 });
 
-// GET /api/auth/microsoft/callback — exchange code, call Graph API, issue JWT
 router.get('/microsoft/callback', async (req, res) => {
     const { code, state, error } = req.query;
-    const frontendUrl = getFrontendUrl();
+    const stateData = await consumeOAuthState(state);
+    const frontendUrl = stateData?.frontendUrl || deriveFrontendUrl(req);
+    const backendUrl = stateData?.backendUrl || deriveBackendUrl(req);
 
     if (error || !code) return res.redirect(`${frontendUrl}/login?oauth_error=microsoft_cancelled`);
-    if (!verifyOAuthState(state)) return res.redirect(`${frontendUrl}/login?oauth_error=invalid_state`);
+    if (!stateData) return res.redirect(`${frontendUrl}/login?oauth_error=invalid_state`);
 
     try {
         const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
@@ -397,7 +424,7 @@ router.get('/microsoft/callback', async (req, res) => {
                 code,
                 client_id: process.env.MICROSOFT_CLIENT_ID,
                 client_secret: process.env.MICROSOFT_CLIENT_SECRET,
-                redirect_uri: `${getBackendUrl()}/api/auth/microsoft/callback`,
+                redirect_uri: `${backendUrl}/api/auth/microsoft/callback`,
                 grant_type: 'authorization_code',
                 scope: 'openid email profile User.Read',
             }),
@@ -416,9 +443,9 @@ router.get('/microsoft/callback', async (req, res) => {
         if (!email) return res.redirect(`${frontendUrl}/login?oauth_error=microsoft_no_email`);
 
         const user = await findOrCreateOAuthUser(email, msUser.displayName, 'microsoft', msUser.id);
-        const jwt = makeToken(user);
+        const jwtToken = makeToken(user);
         const userJson = encodeURIComponent(JSON.stringify(sanitizeUser(user)));
-        res.redirect(`${frontendUrl}/auth/callback?token=${encodeURIComponent(jwt)}&user=${userJson}`);
+        res.redirect(`${frontendUrl}/auth/callback?token=${encodeURIComponent(jwtToken)}&user=${userJson}`);
     } catch (err) {
         console.error('[Microsoft OAuth] Error:', err.message);
         res.redirect(`${frontendUrl}/login?oauth_error=microsoft_failed`);

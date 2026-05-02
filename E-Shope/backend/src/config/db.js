@@ -95,6 +95,100 @@ const initDb = async () => {
         CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
     `);
 
+    // GIN index for PostgreSQL full-text search on products
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_products_fts ON products
+        USING GIN (to_tsvector('english', name || ' ' || COALESCE(description,'') || ' ' || category));
+    `);
+
+    // ─── Feature tables (additive migrations) ────────────────────────────────
+
+    // Event tracking & analytics
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_events (
+            id           SERIAL PRIMARY KEY,
+            user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            session_id   TEXT,
+            event_type   TEXT NOT NULL,
+            product_id   INTEGER REFERENCES products(id) ON DELETE SET NULL,
+            search_query TEXT,
+            ip           TEXT,
+            country      TEXT,
+            city         TEXT,
+            device       TEXT,
+            created_at   TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_events_user    ON user_events(user_id);
+        CREATE INDEX IF NOT EXISTS idx_user_events_product ON user_events(product_id);
+        CREATE INDEX IF NOT EXISTS idx_user_events_type    ON user_events(event_type);
+        CREATE INDEX IF NOT EXISTS idx_user_events_created ON user_events(created_at);
+    `);
+
+    // Returns & refunds
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS return_requests (
+            id            SERIAL PRIMARY KEY,
+            order_id      INTEGER NOT NULL REFERENCES orders(id),
+            user_id       INTEGER NOT NULL REFERENCES users(id),
+            reason        TEXT NOT NULL,
+            status        TEXT DEFAULT 'requested',
+            refund_amount REAL,
+            admin_note    TEXT,
+            created_at    TIMESTAMP DEFAULT NOW(),
+            updated_at    TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_returns_order ON return_requests(order_id);
+        CREATE INDEX IF NOT EXISTS idx_returns_user  ON return_requests(user_id);
+    `);
+
+    // Delivery agents
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS delivery_agents (
+            id          SERIAL PRIMARY KEY,
+            name        TEXT NOT NULL,
+            phone       TEXT UNIQUE NOT NULL,
+            email       TEXT UNIQUE,
+            password    TEXT NOT NULL,
+            is_active   INTEGER DEFAULT 1,
+            current_lat REAL,
+            current_lng REAL,
+            last_seen   TIMESTAMP,
+            created_at  TIMESTAMP DEFAULT NOW()
+        );
+    `);
+
+    // Deliveries (order → agent assignments) — Flipkart/Amazon style
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS deliveries (
+            id                  SERIAL PRIMARY KEY,
+            order_id            INTEGER UNIQUE REFERENCES orders(id),
+            agent_id            INTEGER REFERENCES delivery_agents(id),
+            status              TEXT DEFAULT 'assigned',
+            tracking_token      TEXT UNIQUE NOT NULL,
+            agent_lat           REAL,
+            agent_lng           REAL,
+            estimated_delivery  TIMESTAMP,
+            delivery_attempts   INTEGER DEFAULT 0,
+            max_attempts        INTEGER DEFAULT 3,
+            failed_reason       TEXT,
+            delivery_otp        TEXT,
+            otp_verified        INTEGER DEFAULT 0,
+            delivery_notes      TEXT,
+            assigned_at         TIMESTAMP DEFAULT NOW(),
+            delivered_at        TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_deliveries_token ON deliveries(tracking_token);
+        CREATE INDEX IF NOT EXISTS idx_deliveries_agent ON deliveries(agent_id);
+    `);
+    // Add new columns to existing deployments
+    await pool.query(`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS estimated_delivery TIMESTAMP`);
+    await pool.query(`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS delivery_attempts   INTEGER DEFAULT 0`);
+    await pool.query(`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS max_attempts        INTEGER DEFAULT 3`);
+    await pool.query(`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS failed_reason       TEXT`);
+    await pool.query(`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS delivery_otp        TEXT`);
+    await pool.query(`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS otp_verified        INTEGER DEFAULT 0`);
+    await pool.query(`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS delivery_notes      TEXT`);
+
     // Ensure order_items cascade on order delete (idempotent via constraint name check)
     await pool.query(`
         DO $$ BEGIN
