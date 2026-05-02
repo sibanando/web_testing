@@ -87,7 +87,7 @@ const apiLimiter = makeRateLimiter({
 
 const authLimiter = makeRateLimiter({
     windowMs: 15 * 60 * 1000,
-    max: 20,
+    max: process.env.NODE_ENV === 'production' ? 20 : 200,
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: 'Too many auth attempts, please try again in 15 minutes.' },
@@ -95,7 +95,7 @@ const authLimiter = makeRateLimiter({
 
 const otpLimiter = makeRateLimiter({
     windowMs: 60 * 1000,
-    max: 3,
+    max: process.env.NODE_ENV === 'production' ? 3 : 30,
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: 'Too many OTP requests. Please wait 1 minute.' },
