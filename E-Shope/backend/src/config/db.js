@@ -266,6 +266,17 @@ const initDb = async () => {
         console.log('✓ Seller: seller@apnidunia.com / seller123');
     }
 
+    // ─── Seed Demo Delivery Agent ─────────────────────────────────────────────
+    const { rows: [demoAgent] } = await pool.query("SELECT id FROM delivery_agents WHERE phone = '9876543210'");
+    if (!demoAgent) {
+        const hash = bcrypt.hashSync('agent123', 10);
+        await pool.query(
+            'INSERT INTO delivery_agents (name, phone, email, password) VALUES ($1,$2,$3,$4)',
+            ['Demo Agent', '9876543210', 'agent@apnidunia.com', hash]
+        );
+        console.log('✓ Delivery agent: phone 9876543210 / agent123  →  /agent');
+    }
+
     console.log('✓ PostgreSQL ready');
 };
 
