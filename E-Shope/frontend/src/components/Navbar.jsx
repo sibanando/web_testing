@@ -243,7 +243,7 @@ const Navbar = () => {
                             <Store size={14} /> Seller
                         </Link>
                     )}
-                    {!isMobile && !isTablet && (!user || (user.is_seller !== 1 && user.is_admin !== 1)) && (
+                    {!isMobile && !isTablet && !user && (
                         <Link to="/login?tab=register&seller=1" style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap' }}
                             onMouseEnter={e => e.currentTarget.style.color = '#fbbf24'}
                             onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}>
@@ -336,7 +336,7 @@ const Navbar = () => {
                                 <Store size={16} /> Seller Panel
                             </Link>
                         )}
-                        {(!user || (user.is_seller !== 1 && user.is_admin !== 1)) && (
+                        {!user && (
                             <Link to="/login?tab=register&seller=1" onClick={() => setShowMobileMenu(false)}
                                 style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 12px', fontSize: '14px', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', borderRadius: '6px' }}>
                                 <Store size={16} /> Become a Seller

@@ -66,7 +66,7 @@ const Wishlist = () => {
                         </Link>
                     </div>
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '16px' }}>
                         {items.map(item => {
                             const discount = parseInt(item.discount) || 0;
                             const price = parseFloat(item.price) || 0;

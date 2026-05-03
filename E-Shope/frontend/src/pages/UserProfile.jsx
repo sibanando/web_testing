@@ -3,10 +3,12 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, ShoppingBag, Lock, Edit2, Check, X, Eye, EyeOff, Package, LogOut, MapPin, Calendar, CreditCard, Truck, Heart, MessageCircle, Gift, Star, Send, ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import api from '../services/api';
+import useResponsive from '../hooks/useResponsive';
 
 const UserProfile = () => {
     const { user, logout, updateUser } = useAuth();
     const navigate = useNavigate();
+    const { isMobile } = useResponsive();
     const [activeTab, setActiveTab] = useState('profile');
     const [orders, setOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(false);
@@ -154,11 +156,53 @@ const UserProfile = () => {
 
     if (!user) return null;
 
-    return (
-        <div style={{ background: '#f8fafc', minHeight: '100vh', padding: '24px 16px' }}>
-            <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'grid', gridTemplateColumns: '260px 1fr', gap: '20px', alignItems: 'flex-start' }}>
+    const profileTabs = [
+        { id: 'profile',  icon: <User size={16} />,          label: 'Profile',  color: '#2563eb', bg: '#eff6ff' },
+        { id: 'orders',   icon: <ShoppingBag size={16} />,   label: 'Orders',   color: '#2563eb', bg: '#eff6ff' },
+        { id: 'loyalty',  icon: <Gift size={16} />,          label: 'Loyalty',  color: '#d97706', bg: '#fffbeb' },
+        { id: 'tickets',  icon: <MessageCircle size={16} />, label: 'Tickets',  color: '#7c3aed', bg: '#f5f3ff' },
+    ];
 
-                {/* ── Sidebar ─────────────────────────── */}
+    return (
+        <div style={{ background: '#f8fafc', minHeight: '100vh', padding: isMobile ? '0' : '24px 16px' }}>
+
+            {/* Mobile: compact header + tab strip */}
+            {isMobile && (
+                <div>
+                    <div style={{ background: avatarGradient, padding: '20px 16px 16px', position: 'relative', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 800, color: 'white', border: '2px solid rgba(255,255,255,0.3)', flexShrink: 0 }}>
+                                {initials}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ fontSize: '15px', fontWeight: 800, color: 'white', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</p>
+                                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
+                            </div>
+                            <button onClick={() => { logout(); navigate('/'); }} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: 'white', cursor: 'pointer', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>
+                                <LogOut size={13} /> Out
+                            </button>
+                        </div>
+                    </div>
+                    <div style={{ background: 'white', borderBottom: '1px solid #e2e8f0', overflowX: 'auto', display: 'flex', scrollbarWidth: 'none' }}>
+                        {profileTabs.map(tab => {
+                            const active = activeTab === tab.id;
+                            const badge = tab.id === 'orders' ? orders.length : tab.id === 'tickets' ? tickets.filter(t => t.status === 'open' || t.status === 'in_progress').length : 0;
+                            return (
+                                <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '10px 16px', border: 'none', borderBottom: active ? `3px solid ${tab.color}` : '3px solid transparent', background: 'transparent', cursor: 'pointer', whiteSpace: 'nowrap', position: 'relative', color: active ? tab.color : '#94a3b8', fontWeight: active ? 700 : 400, fontSize: '11px', flexShrink: 0 }}>
+                                    {tab.icon}
+                                    {tab.label}
+                                    {badge > 0 && <span style={{ position: 'absolute', top: '6px', right: '8px', width: '16px', height: '16px', background: tab.color, color: 'white', borderRadius: '50%', fontSize: '9px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{badge}</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            <div style={{ maxWidth: '1100px', margin: '0 auto', display: isMobile ? 'block' : 'grid', gridTemplateColumns: isMobile ? undefined : '260px 1fr', gap: '20px', alignItems: 'flex-start', padding: isMobile ? '16px' : undefined }}>
+
+                {/* ── Sidebar (desktop only) ─────────────────────────── */}
+                {!isMobile && (
                 <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
                     {/* Avatar Banner */}
                     <div style={{ background: avatarGradient, padding: '28px 20px 24px', position: 'relative', overflow: 'hidden' }}>
@@ -238,6 +282,7 @@ const UserProfile = () => {
                         </div>
                     </div>
                 </div>
+                )}
 
                 {/* ── Main Content ─────────────────────── */}
                 <div>
@@ -264,7 +309,7 @@ const UserProfile = () => {
 
                                 <Alert msg={profileMsg} />
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px' }}>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Full Name</label>
                                         <input value={profileForm.name} disabled={!editingProfile}
@@ -374,7 +419,7 @@ const UserProfile = () => {
                                     {/* How to Earn */}
                                     <div style={{ background: 'white', borderRadius: '16px', padding: '20px', border: '1px solid #e2e8f0' }}>
                                         <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', margin: '0 0 14px' }}>How to earn points</h3>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px' }}>
                                             {[
                                                 { icon: <ShoppingBag size={16} />, label: 'Place an order', pts: '1 pt per ₹10', color: '#2563eb' },
                                                 { icon: <Star size={16} />, label: 'Write a review', pts: '+50 pts', color: '#d97706' },
@@ -443,7 +488,7 @@ const UserProfile = () => {
                                 <div style={{ background: 'white', borderRadius: '16px', padding: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,0,0,0.06)' }}>
                                     <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a', margin: '0 0 16px' }}>Open New Support Ticket</h3>
                                     {ticketMsg && <div style={{ padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '14px', background: ticketMsg.ok ? '#ecfdf5' : '#fef2f2', color: ticketMsg.ok ? '#059669' : '#dc2626', border: `1px solid ${ticketMsg.ok ? '#a7f3d0' : '#fca5a5'}` }}>{ticketMsg.text}</div>}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
                                         <div style={{ gridColumn: '1/-1' }}>
                                             <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '5px' }}>Subject</label>
                                             <input value={newTicketForm.subject} onChange={e => setNewTicketForm(p => ({ ...p, subject: e.target.value }))}

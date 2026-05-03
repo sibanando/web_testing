@@ -165,7 +165,7 @@ router.get('/crm/segments', adminGuard, async (req, res) => {
             FROM users u
             LEFT JOIN orders o  ON o.user_id = u.id AND o.status NOT IN ('Cancelled','Returned')
             LEFT JOIN loyalty_ledger ll ON ll.user_id = u.id
-            WHERE u.is_admin = 0
+            WHERE u.is_admin = 0 AND u.is_seller = 0
             GROUP BY u.id
             ORDER BY total_spend DESC
             LIMIT 25
@@ -175,7 +175,7 @@ router.get('/crm/segments', adminGuard, async (req, res) => {
             SELECT u.id, u.name, u.email, MAX(o.created_at) as last_order
             FROM users u
             LEFT JOIN orders o ON o.user_id = u.id
-            WHERE u.is_admin = 0
+            WHERE u.is_admin = 0 AND u.is_seller = 0
             GROUP BY u.id
             HAVING MAX(o.created_at) < NOW() - INTERVAL '30 days' OR MAX(o.created_at) IS NULL
             ORDER BY last_order DESC NULLS LAST

@@ -5,6 +5,7 @@ import api from '../services/api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useWishlist } from '../context/WishlistContext';
+import useResponsive from '../hooks/useResponsive';
 
 const ProductDetail = () => {
     const { id } = useParams();
@@ -13,6 +14,7 @@ const ProductDetail = () => {
     const { user } = useAuth();
     const { wishlistIds, toggleWishlist } = useWishlist();
     const isShopRole = user?.is_admin === 1 || user?.is_seller === 1;
+    const { isMobile, isTablet } = useResponsive();
 
     const [product, setProduct] = useState(null);
     const [related, setRelated] = useState([]);
@@ -106,10 +108,10 @@ const ProductDetail = () => {
             <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '16px' }}>
 
                 {/* Main card */}
-                <div style={{ background: 'white', borderRadius: '2px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', gap: '0', overflow: 'hidden', marginBottom: '16px' }}>
+                <div style={{ background: 'white', borderRadius: '2px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '0', overflow: 'hidden', marginBottom: '16px' }}>
 
                     {/* Left: Image panel */}
-                    <div style={{ width: '420px', flexShrink: 0, borderRight: '1px solid #f0f0f0' }}>
+                    <div style={{ width: isMobile ? '100%' : isTablet ? '340px' : '420px', flexShrink: 0, borderRight: isMobile ? 'none' : '1px solid #f0f0f0', borderBottom: isMobile ? '1px solid #f0f0f0' : 'none' }}>
                         {/* Main image */}
                         <div style={{ padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '340px', background: 'white', position: 'relative' }}>
                             {discount > 0 && (
@@ -409,7 +411,7 @@ const ProductDetail = () => {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #f0f0f0' }}>
                             <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#212121', margin: 0 }}>Similar Products</h2>
                         </div>
-                        <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
+                        <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? '130px' : '150px'}, 1fr))`, gap: '12px' }}>
                             {related.map(p => {
                                 const pImg = (() => { try { const imgs = typeof p.images === 'string' ? JSON.parse(p.images) : p.images; return imgs?.[0] || 'https://placehold.co/200x200?text=P'; } catch { return 'https://placehold.co/200x200?text=P'; } })();
                                 const pPrice = parseFloat(p.price) || 0;

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import useResponsive from '../hooks/useResponsive';
 import {
     Plus, Package, BarChart2, ShoppingBag, Users,
     Trash2, LogOut, Home, UserCheck, Pencil, X, Eye, EyeOff,
@@ -110,6 +111,7 @@ const StatusBadge = ({ status, map }) => {
 const Admin = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const { isMobile, isTablet } = useResponsive();
     const [activeTab, setActiveTab] = useState('products');
 
     // ── Products ──────────────────────────────────────────────────────────────
@@ -444,7 +446,7 @@ const Admin = () => {
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div style={{ background: '#f8fafc', minHeight: '100vh', display: 'flex' }}>
+        <div style={{ background: '#f8fafc', minHeight: '100vh', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
 
             {/* ── Modals ────────────────────────────────────────────── */}
 
@@ -552,8 +554,37 @@ const Admin = () => {
                 </Modal>
             )}
 
-            {/* ── Sidebar ───────────────────────────────────────────── */}
-            <div style={{ width: '240px', flexShrink: 0, background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)', display: 'flex', flexDirection: 'column', minHeight: '100vh', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+            {/* ── Mobile top nav ─────────────────────────────────────── */}
+            {isMobile && (
+                <div style={{ background: 'linear-gradient(135deg, #0f172a, #1e293b)', position: 'sticky', top: 0, zIndex: 50 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Shield size={15} color="white" />
+                            </div>
+                            <span style={{ color: 'white', fontWeight: 800, fontSize: '14px' }}>Admin Portal</span>
+                        </div>
+                        <button onClick={() => { logout(); navigate('/'); }} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(239,68,68,0.15)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: '#f87171', cursor: 'pointer', fontSize: '12px' }}>
+                            <LogOut size={13} /> Out
+                        </button>
+                    </div>
+                    <div style={{ display: 'flex', overflowX: 'auto', scrollbarWidth: 'none', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        {navItems.map(tab => {
+                            const active = activeTab === tab.id;
+                            return (
+                                <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', padding: '8px 14px', border: 'none', borderBottom: active ? '2px solid #818cf8' : '2px solid transparent', background: 'transparent', cursor: 'pointer', color: active ? '#818cf8' : 'rgba(255,255,255,0.4)', fontSize: '10px', fontWeight: active ? 700 : 400, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                    <span style={{ color: active ? '#818cf8' : 'rgba(255,255,255,0.3)' }}>{tab.icon}</span>
+                                    {tab.label}
+                                    {tab.count > 0 && <span style={{ position: 'absolute', marginTop: '-18px', marginLeft: '18px', width: '14px', height: '14px', background: '#ef4444', color: 'white', borderRadius: '50%', fontSize: '8px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{tab.count}</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Sidebar (desktop) ─────────────────────────────────── */}
+            <div style={{ width: '240px', flexShrink: 0, background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)', display: isMobile ? 'none' : 'flex', flexDirection: 'column', minHeight: '100vh', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px rgba(99,102,241,0.4)' }}>
@@ -637,14 +668,14 @@ const Admin = () => {
                 <div style={{ padding: '20px 24px', flex: 1 }}>
 
                     {/* Stats Row */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '20px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: isMobile ? '10px' : '14px', marginBottom: '20px' }}>
                         {tabStats.map((s, i) => <StatCard key={i} {...s} />)}
                     </div>
 
                     {/* ── Products Tab ─────────────────────────────────── */}
                     {activeTab === 'products' && (
-                        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                            <div style={{ width: '280px', flexShrink: 0 }}>
+                        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '16px', alignItems: 'flex-start' }}>
+                            <div style={{ width: isMobile ? '100%' : '280px', flexShrink: 0 }}>
                                 <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
                                     <div style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '8px', background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)' }}>
                                         <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -824,10 +855,10 @@ const Admin = () => {
 
                     {/* ── Deliveries Tab ────────────────────────────────── */}
                     {activeTab === 'deliveries' && (
-                        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '16px', alignItems: 'flex-start' }}>
 
                             {/* Left panel: Create Agent + Agents list */}
-                            <div style={{ width: '268px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={{ width: isMobile ? '100%' : '268px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                 <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
                                     <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <div style={{ width: '26px', height: '26px', borderRadius: '7px', background: 'linear-gradient(135deg, #0891b2, #0e7490)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Truck size={13} color="white" /></div>
@@ -1069,7 +1100,7 @@ const Admin = () => {
                                     </div>
 
                                     {/* Device + Daily visitors row */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
 
                                         {/* Device breakdown */}
                                         <div style={{ background: 'white', borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
@@ -1194,7 +1225,7 @@ const Admin = () => {
                                 : crmSegments ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                         {/* Segment summary */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: '12px' }}>
                                             {crmSegments.segments.map(seg => {
                                                 const cfg = { VIP: { color: '#7c3aed', bg: '#f5f3ff' }, 'High Value': { color: '#d97706', bg: '#fffbeb' }, Regular: { color: '#2563eb', bg: '#eff6ff' }, New: { color: '#64748b', bg: '#f1f5f9' } }[seg.segment] || { color: '#64748b', bg: '#f1f5f9' };
                                                 return (
@@ -1415,7 +1446,7 @@ const Admin = () => {
                                 : loyaltyOverview ? (
                                     <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
                                         {/* Summary cards */}
-                                        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'12px' }}>
+                                        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap:'12px' }}>
                                             {[
                                                 { label:'Active Members', value: loyaltyOverview.summary?.active_members||0, color:'#2563eb' },
                                                 { label:'Total Earned', value: (loyaltyOverview.summary?.total_earned||0).toLocaleString()+'pts', color:'#059669' },
@@ -1431,7 +1462,7 @@ const Admin = () => {
                                         {/* Tier distribution */}
                                         <div style={{ background:'white', borderRadius:'14px', padding:'20px', boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
                                             <h3 style={{ fontSize:'13px', fontWeight:700, margin:'0 0 14px' }}>Tier Distribution</h3>
-                                            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'12px' }}>
+                                            <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap:'12px' }}>
                                                 {[
                                                     { tier:'Bronze', count: loyaltyOverview.tierStats?.bronze||0, color:'#92400e', bg:'#fef3c7' },
                                                     { tier:'Silver', count: loyaltyOverview.tierStats?.silver||0, color:'#64748b', bg:'#f1f5f9' },
@@ -1446,7 +1477,7 @@ const Admin = () => {
                                             </div>
                                         </div>
                                         {/* Leaderboard + manual adjust */}
-                                        <div style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:'16px' }}>
+                                        <div style={{ display:'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap:'16px' }}>
                                             <div style={{ background:'white', borderRadius:'14px', overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
                                                 <div style={{ padding:'12px 16px', borderBottom:'1px solid #f1f5f9', background:'linear-gradient(135deg,#f8fafc,#f1f5f9)' }}>
                                                     <h3 style={{ fontSize:'13px', fontWeight:700, margin:0 }}>Top 20 Earners</h3>

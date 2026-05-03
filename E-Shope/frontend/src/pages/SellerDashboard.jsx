@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import useResponsive from '../hooks/useResponsive';
 import {
     Store, Package, Plus, Pencil, Trash2, X,
     BarChart2, ShoppingBag, TrendingUp, LogOut,
@@ -78,6 +79,7 @@ const StatCard = ({ label, value, icon, color, bg, sub }) => (
 const SellerDashboard = () => {
     const { user, logout, updateUser } = useAuth();
     const navigate = useNavigate();
+    const { isMobile, isTablet } = useResponsive();
     const [activeTab, setActiveTab] = useState('dashboard');
 
     const [products, setProducts] = useState([]);
@@ -256,7 +258,7 @@ const SellerDashboard = () => {
     ];
 
     return (
-        <div style={{ background: '#f0fdf4', minHeight: '100vh', display: 'flex' }}>
+        <div style={{ background: '#f0fdf4', minHeight: '100vh', display: 'flex', flexDirection: isMobile ? 'column' : 'row' }}>
 
             {/* Edit Product Modal */}
             {editProduct && (
@@ -287,11 +289,39 @@ const SellerDashboard = () => {
                 </Modal>
             )}
 
-            {/* ── Sidebar ─────────────────────────────────────── */}
+            {/* ── Mobile top nav ─────────────────────────────── */}
+            {isMobile && (
+                <div style={{ background: 'linear-gradient(135deg, #042f2e, #065f46)', position: 'sticky', top: 0, zIndex: 50 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'linear-gradient(135deg,#10b981,#059669)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Store size={15} color="white" />
+                            </div>
+                            <span style={{ color: 'white', fontWeight: 800, fontSize: '14px' }}>Seller Hub</span>
+                        </div>
+                        <button onClick={() => { logout(); navigate('/'); }} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: '12px' }}>
+                            <LogOut size={13} /> Out
+                        </button>
+                    </div>
+                    <div style={{ display: 'flex', overflowX: 'auto', scrollbarWidth: 'none', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        {sidebarTabs.map(tab => {
+                            const active = activeTab === tab.id;
+                            return (
+                                <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', padding: '8px 14px', border: 'none', borderBottom: active ? '2px solid #10b981' : '2px solid transparent', background: 'transparent', cursor: 'pointer', color: active ? '#6ee7b7' : 'rgba(255,255,255,0.4)', fontSize: '10px', fontWeight: active ? 700 : 400, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                    <span style={{ color: active ? '#10b981' : 'rgba(255,255,255,0.3)' }}>{tab.icon}</span>
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Sidebar (desktop) ────────────────────────────── */}
             <div style={{
                 width: '230px', flexShrink: 0,
                 background: 'linear-gradient(180deg, #042f2e 0%, #065f46 100%)',
-                display: 'flex', flexDirection: 'column',
+                display: isMobile ? 'none' : 'flex', flexDirection: 'column',
                 minHeight: '100vh',
                 borderRight: '1px solid rgba(255,255,255,0.05)',
             }}>
@@ -446,7 +476,7 @@ const SellerDashboard = () => {
                     {/* ── Dashboard Tab ──────────────────────────── */}
                     {activeTab === 'dashboard' && (
                         <div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '20px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: isMobile ? '10px' : '14px', marginBottom: '20px' }}>
                                 <StatCard label="My Products" value={stats.totalProducts} icon={<Package size={22} />} color="#10b981" bg="#ecfdf5" sub="Listed for sale" />
                                 <StatCard label="Orders Received" value={stats.totalOrders} icon={<ShoppingBag size={22} />} color="#3b82f6" bg="#eff6ff" sub="All time" />
                                 <StatCard label="Total Revenue" value={`₹${parseFloat(stats.revenue || 0).toLocaleString('en-IN')}`} icon={<TrendingUp size={22} />} color="#f59e0b" bg="#fffbeb" sub="Gross earnings" />

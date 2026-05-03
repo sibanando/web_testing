@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import useResponsive from '../hooks/useResponsive';
 
 // Fix Leaflet default icon
 delete L.Icon.Default.prototype._getIconUrl;
@@ -33,6 +34,7 @@ export default function TrackOrder() {
     const [error, setError]   = useState('');
     const [loading, setLoading] = useState(true);
     const mapRef = useRef(null);
+    const { isMobile } = useResponsive();
 
     async function load() {
         try {
@@ -117,7 +119,7 @@ export default function TrackOrder() {
             </div>
 
             {/* Agent + order info */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
                 <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: '12px', padding: '16px' }}>
                     <div style={{ color: '#888', fontSize: '12px', marginBottom: '6px' }}>DELIVERY AGENT</div>
                     <div style={{ fontWeight: 700, color: '#1C1917', marginBottom: '4px' }}>{info.agent_name}</div>

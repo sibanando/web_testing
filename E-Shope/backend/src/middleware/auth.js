@@ -12,7 +12,9 @@ const verifyToken = (req, res, next) => {
     if (!auth || !auth.startsWith('Bearer '))
         return res.status(401).json({ message: 'Unauthorized' });
     try {
-        req.user = jwt.verify(auth.slice(7), JWT_SECRET);
+        const payload = jwt.verify(auth.slice(7), JWT_SECRET);
+        if (!payload.id) return res.status(401).json({ message: 'Unauthorized' });
+        req.user = payload;
         next();
     } catch {
         return res.status(401).json({ message: 'Invalid token' });

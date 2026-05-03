@@ -59,7 +59,7 @@ async function uploadBuffer(filename, buffer, mimeType) {
         Body: buffer,
         ContentType: mimeType,
     }));
-    return `${MINIO_PUBLIC_URL}/${MINIO_BUCKET}/${filename}`;
+    return `/uploads/${filename}`;
 }
 
 function isConfigured() {
