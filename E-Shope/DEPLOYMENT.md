@@ -3,16 +3,18 @@
 ## Table of Contents
 1. [Quick Start — Docker Compose](#1-quick-start--docker-compose)
 2. [Environment Variables](#2-environment-variables)
-3. [Kubernetes / kind (local staging)](#3-kubernetes--kind-local-staging)
-4. [Production Kubernetes (cloud)](#4-production-kubernetes-cloud)
-5. [Enabling TLS / HTTPS](#5-enabling-tls--https)
-6. [SMS OTP Setup](#6-sms-otp-setup)
-7. [OAuth Social Login Setup](#7-oauth-social-login-setup)
-8. [Database](#8-database)
-9. [CI/CD — GitHub Actions](#9-cicd--github-actions)
-10. [After Code Changes](#10-after-code-changes)
-11. [Security Hardening](#11-security-hardening)
-12. [Production Checklist](#12-production-checklist)
+3. [Object Storage — MinIO](#3-object-storage--minio)
+4. [Kubernetes / kind (local staging)](#4-kubernetes--kind-local-staging)
+5. [Production Kubernetes (cloud)](#5-production-kubernetes-cloud)
+6. [Enabling TLS / HTTPS](#6-enabling-tls--https)
+7. [SMS OTP Setup](#7-sms-otp-setup)
+8. [Email (SMTP) Setup](#8-email-smtp-setup)
+9. [OAuth Social Login Setup](#9-oauth-social-login-setup)
+10. [Database](#10-database)
+11. [CI/CD — GitHub Actions](#11-cicd--github-actions)
+12. [After Code Changes](#12-after-code-changes)
+13. [Security Hardening](#13-security-hardening)
+14. [Production Checklist](#14-production-checklist)
 
 ---
 
@@ -23,7 +25,7 @@
 cp .env.example .env
 # Edit .env — at minimum change JWT_SECRET and POSTGRES_PASSWORD
 
-# 2. Build and start
+# 2. Build and start all services
 docker compose up --build -d
 
 # 3. Open
@@ -32,16 +34,20 @@ curl http://localhost:5000/health   # backend liveness
 curl http://localhost:5000/ready    # backend + DB readiness
 ```
 
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:5555 |
-| Backend API | http://localhost:5000 |
-| Liveness | http://localhost:5000/health |
-| Readiness | http://localhost:5000/ready |
+| Service | URL | Notes |
+|---------|-----|-------|
+| Frontend | http://localhost:5555 | React app via nginx |
+| Backend API | http://localhost:5000 | Express, direct access |
+| MinIO Console | http://localhost:9001 | Object storage UI |
+| Uptime Kuma | http://localhost:3001 | Uptime monitoring dashboard |
+| Liveness | http://localhost:5000/health | |
+| Readiness | http://localhost:5000/ready | Checks DB connection |
+
+> MinIO default credentials: user `apnidunia` / password `apnidunia_minio_2024` — change in production.
 
 ```bash
 docker compose down          # stop (keep data)
-docker compose down -v       # stop + wipe DB volume
+docker compose down -v       # stop + wipe all volumes (DB, MinIO, Redis)
 docker compose logs -f backend
 docker compose logs -f frontend
 ```
@@ -64,13 +70,21 @@ Copy `.env.example` to `.env` and fill in all values.
 | `PORT` | `5000` | Leave as-is |
 | `FRONTEND_URL` | `http://localhost:5555` | `https://yourdomain.com` |
 | `BACKEND_URL` | `http://localhost:5000` | `https://api.yourdomain.com` |
+| `REDIS_URL` | `redis://redis:6379` | Managed Redis URL in production |
+| `MINIO_ENDPOINT` | `http://minio:9000` | Internal MinIO address (docker/k8s) |
+| `MINIO_ACCESS_KEY` | `apnidunia` | **Must change** in production |
+| `MINIO_SECRET_KEY` | `apnidunia_minio_2024` | **Must change** in production |
+| `MINIO_BUCKET` | `apnidunia` | Bucket name |
+| `SMTP_HOST` | (empty — email disabled) | e.g. `smtp.gmail.com` |
+| `SMTP_PORT` | `587` | 465 for SSL, 587 for STARTTLS |
+| `SMTP_USER` | (empty) | SMTP username / email |
+| `SMTP_PASS` | (empty) | SMTP password / app password |
+| `SMTP_FROM` | `ApniDunia <noreply@apnidunia.com>` | From address for outbound email |
 | `GOOGLE_CLIENT_ID` | (empty — button shows "not configured") | From Google Cloud Console |
 | `GOOGLE_CLIENT_SECRET` | (empty) | From Google Cloud Console |
 | `MICROSOFT_CLIENT_ID` | (empty — button shows "not configured") | From Azure App registration |
 | `MICROSOFT_CLIENT_SECRET` | (empty) | From Azure App registration |
 | `MICROSOFT_TENANT_ID` | `common` | `common` or your tenant GUID |
-
-> The backend exits at startup if `NODE_ENV=production` and `JWT_SECRET` is the default value.
 
 ### Frontend build-time variable
 
@@ -78,9 +92,47 @@ Copy `.env.example` to `.env` and fill in all values.
 |----------|-----|-------------|
 | `VITE_API_URL` | `http://localhost:5000/api` | `/api` (nginx proxies it) |
 
+> The backend exits at startup if `NODE_ENV=production` and `JWT_SECRET` is the default value.
+
 ---
 
-## 3. Kubernetes / kind (local staging)
+## 3. Object Storage — MinIO
+
+MinIO is included in `docker-compose.yml` and starts automatically. Product images are uploaded to MinIO, resized to 800px WebP by Sharp, and served via the nginx `/uploads/` proxy — so image URLs are always host-independent (`/uploads/<filename>`).
+
+### How it works
+
+```
+Browser → nginx :5555/uploads/foo.webp
+       → nginx proxies to → http://minio:9000/apnidunia/foo.webp
+```
+
+Stored DB values are `/uploads/<filename>`, **never** `http://IP:port/...`. If you find old baked-in URLs, migrate them:
+
+```sql
+UPDATE products
+SET images = regexp_replace(
+    images,
+    'https?://[^/"]+/[^/"]+/([^"]+)',
+    '/uploads/\1',
+    'g'
+)
+WHERE images ~ 'https?://';
+```
+
+### MinIO Console
+
+Access at http://localhost:9001 (dev) or expose port 9001 through your ingress in production.
+
+Default login: `apnidunia` / `apnidunia_minio_2024` — **change both before production**.
+
+### Production: swap to S3-compatible cloud storage
+
+Set `MINIO_ENDPOINT` to your S3-compatible endpoint (AWS S3, Cloudflare R2, Backblaze B2, etc.) and set the matching keys. The nginx proxy rule stays the same — it always points to `minio:9000` internally; update the proxy target in `frontend/nginx.conf` if your storage is external.
+
+---
+
+## 4. Kubernetes / kind (local staging)
 
 ### Prerequisites
 ```bash
@@ -113,7 +165,7 @@ kubectl apply -k k8s/
 
 ---
 
-## 4. Production Kubernetes (cloud)
+## 5. Production Kubernetes (cloud)
 
 ### Build and push images
 
@@ -139,12 +191,12 @@ imagePullPolicy: Always
 **Option A — kubectl secret (simplest)**
 ```bash
 kubectl create namespace apnidunia --dry-run=client -o yaml | kubectl apply -f -
-kubectl create secret generic postgres-secret \
+kubectl create secret generic app-secret \
   --namespace apnidunia \
-  --from-literal=POSTGRES_DB=apnidunia \
-  --from-literal=POSTGRES_USER=postgres \
   --from-literal=POSTGRES_PASSWORD=$(openssl rand -hex 32) \
   --from-literal=JWT_SECRET=$(openssl rand -hex 64) \
+  --from-literal=MINIO_ACCESS_KEY=apnidunia-prod \
+  --from-literal=MINIO_SECRET_KEY=$(openssl rand -hex 32) \
   --from-literal=DATABASE_URL="postgresql://postgres:YOURPASS@postgres-service:5432/apnidunia"
 ```
 
@@ -176,21 +228,9 @@ helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   --set controller.service.type=LoadBalancer
 ```
 
-### File uploads — use object storage in production
-
-Multer writes to the container filesystem by default (ephemeral). Swap to:
-
-| Cloud | Service | Library |
-|-------|---------|---------|
-| AWS | S3 | `multer-s3` |
-| GCP | Cloud Storage | `@google-cloud/storage` |
-| Azure | Blob Storage | `multer-azure-blob-storage` |
-
-Update `backend/src/routes/uploadRoute.js` with the cloud storage adapter.
-
 ---
 
-## 5. Enabling TLS / HTTPS
+## 6. Enabling TLS / HTTPS
 
 ### Install cert-manager
 ```bash
@@ -237,7 +277,7 @@ kubectl apply -f k8s/ingress.yaml
 
 ---
 
-## 6. SMS OTP Setup
+## 7. SMS OTP Setup
 
 By default, OTP is printed to the backend log. To deliver real SMS to Indian numbers:
 
@@ -250,7 +290,26 @@ When key is absent: `docker compose logs backend` shows the OTP.
 
 ---
 
-## 7. OAuth Social Login Setup
+## 8. Email (SMTP) Setup
+
+Email is optional. When `SMTP_HOST` is not set, email features (order confirmations, notifications) are silently skipped.
+
+### Gmail example
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=you@gmail.com
+SMTP_PASS=your_app_password   # Google → Account → Security → App passwords
+SMTP_FROM=ApniDunia <you@gmail.com>
+```
+
+### Other providers
+Use the SMTP credentials from your provider (SendGrid, Mailgun, AWS SES, Zoho, etc.). For port 465 (implicit TLS) set `SMTP_SECURE=true`.
+
+---
+
+## 9. OAuth Social Login Setup
 
 Users can sign in with **Google (Gmail)** or **Microsoft (Outlook/Work)** accounts. The flow uses the server-side Authorization Code grant — no extra npm packages required.
 
@@ -307,21 +366,23 @@ The OAuth callback URLs registered in Google/Microsoft consoles must match `BACK
 
 ---
 
-## 8. Database
-
+## 10. Database
 
 ### Auto-schema (CREATE TABLE IF NOT EXISTS on every start)
 
-Tables: `users`, `products`, `orders`, `order_items`
+Tables: `users`, `products`, `orders`, `order_items`, `delivery_agents`, `deliveries`,
+`wishlists`, `reviews`, `support_tickets`, `loyalty_points`, `notifications`
+
 Indexes auto-created on: `products.category`, `products.seller_id`, `orders.user_id`, `order_items.order_id`
 
 ### Seed data (applied once, if tables are empty)
 
-| Role | Email | Password |
-|------|-------|----------|
+| Role | Email / Phone | Password |
+|------|--------------|----------|
 | Admin | sibanando@apnidunia.com | Sib@1984 |
 | Customer | user@example.com | password123 |
 | Seller | seller@apnidunia.com | seller123 |
+| Delivery Agent | phone: 9876543210 | agent123 |
 
 21 products across 10 categories.
 
@@ -343,7 +404,7 @@ kubectl rollout restart deployment/postgres -n apnidunia
 
 ---
 
-## 9. CI/CD — GitHub Actions
+## 11. CI/CD — GitHub Actions
 
 `.github/workflows/ci.yml` runs on push to `main` / `develop` and on PRs to `main`:
 
@@ -359,12 +420,18 @@ Uncomment the `publish` job in `.github/workflows/ci.yml`. It uses `GITHUB_TOKEN
 
 ---
 
-## 10. After Code Changes
+## 12. After Code Changes
 
 ### Docker Compose
 ```bash
-docker compose up --build -d
+# Rebuild only what changed
+docker compose up --build -d backend    # backend only
+docker compose up --build -d frontend   # frontend only
+docker compose up --build -d            # everything
+
 # Hard-refresh browser (Ctrl+Shift+R) after frontend changes
+# If nginx cached stale DNS after backend restart:
+docker exec e-shope-frontend-1 nginx -s reload
 ```
 
 ### Kubernetes
@@ -380,9 +447,9 @@ kubectl rollout restart deployment/frontend -n apnidunia
 
 ---
 
-## 11. Security Hardening
+## 13. Security Hardening
 
-### Vulnerabilities fixed (as of commit 623e823)
+### Vulnerabilities fixed
 
 | Severity | Issue | Fix applied |
 |----------|-------|-------------|
@@ -392,19 +459,24 @@ kubectl rollout restart deployment/frontend -n apnidunia
 | High | Payment endpoints unauthenticated — anyone could create/poll sessions | `verifyToken` added to all `/api/payment/*` routes |
 | High | ReDoS in `minimatch`, `path-to-regexp`, `picomatch` (npm deps) | `npm audit fix` — 0 vulnerabilities |
 | High | Internal DB errors exposed in API responses | Replaced with generic 500 messages; errors logged server-side only |
+| High | Delivery agent JWTs accepted by `verifyToken` — `user_id = undefined` caused DB NOT NULL violations | `verifyToken` now rejects any JWT without `.id` in payload |
 | Medium | DB SSL `rejectUnauthorized: false` — accepted invalid certs | Changed to `true` |
 | Medium | Any logged-in user could upload files (storage abuse) | Upload restricted to sellers and admins only |
 | Medium | No password minimum length | 8-character minimum enforced at registration |
+| Medium | MinIO image URLs baked with server IP — broke on IP change | `uploadBuffer` now returns `/uploads/<filename>`; nginx proxies to MinIO internally |
 
 ### Known remaining limitations
-
-These require infrastructure changes rather than code changes:
 
 - **Rate limiter is in-memory** — per-pod counters don't sync in K8s multi-replica deployments. Add `rate-limit-redis`:
   ```bash
   npm install rate-limit-redis ioredis
   ```
   Then pass a `store` option to each `rateLimit()` call in `index.js`.
+
+- **`trust proxy` not set** — nginx sends `X-Forwarded-For` but Express doesn't trust it, causing `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` warnings. Add before rate limiters:
+  ```js
+  app.set('trust proxy', 1);
+  ```
 
 - **OTP / OAuth state stores are in-memory** — neither survives pod restarts nor syncs across replicas. Replace both `otpStore` and `oauthStateStore` Maps in `authRoute.js` with Redis + TTL:
   ```js
@@ -439,19 +511,21 @@ docker run --rm -v $(pwd)/backend:/app -w /app node:20-alpine npm audit
 
 ---
 
-## 12. Production Checklist
+## 14. Production Checklist
 
 ### Security
 - [ ] `JWT_SECRET` changed (`openssl rand -hex 64`)
 - [ ] `POSTGRES_PASSWORD` changed from default
+- [ ] `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` changed from defaults
 - [ ] `ALLOWED_ORIGINS` set to exact origin(s) — e.g. `https://yourdomain.com` (no trailing slash)
 - [ ] `NODE_ENV=production` set
 - [ ] Secrets in `.env` (gitignored) or Sealed Secrets — **not committed to git**
 - [ ] TLS enabled (cert-manager + Let's Encrypt)
 - [ ] Git remote URL does not contain credentials (use SSH or token via env)
 - [ ] `npm audit` shows 0 high/critical vulnerabilities
-- [ ] CSP configured in helmet (currently disabled — see Section 10)
+- [ ] CSP configured in helmet (currently disabled — see Section 13)
 - [ ] Rate limiter backed by Redis for multi-replica deployments
+- [ ] `app.set('trust proxy', 1)` added before rate limiters (nginx reverse proxy)
 
 ### Infrastructure
 - [ ] Images pushed to a registry (GHCR / ECR / GCR / ACR)
@@ -459,14 +533,17 @@ docker run --rm -v $(pwd)/backend:/app -w /app node:20-alpine npm audit
 - [ ] PVC StorageClass → cloud-native (EBS / GCP PD / Azure Disk)
 - [ ] Postgres as managed service for HA (RDS / Cloud SQL / Azure DB)
 - [ ] `DB_SSL=true` (and managed DB uses a valid CA-signed cert — `rejectUnauthorized: true`)
-- [ ] File uploads → S3 / Cloud Storage / Azure Blob
+- [ ] Redis as managed service (ElastiCache / Upstash / Azure Cache)
+- [ ] MinIO → S3-compatible cloud storage (`MINIO_ENDPOINT` points to provider)
 - [ ] `k8s/network-policy.yaml` applied (postgres ↔ backend only)
 
 ### Application
 - [ ] `FAST2SMS_API_KEY` set for real OTP delivery
 - [ ] OTP store migrated from in-memory Map to Redis (required for HA)
+- [ ] SMTP configured (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`) for transactional email
 - [ ] Real payment gateway integrated (Razorpay for India)
 - [ ] Demo credentials removed or rotated in production seed
+- [ ] All product images stored as `/uploads/<filename>` — no baked-in host URLs in DB
 
 ### OAuth Social Login
 - [ ] `FRONTEND_URL` and `BACKEND_URL` set to production HTTPS URLs
@@ -479,3 +556,4 @@ docker run --rm -v $(pwd)/backend:/app -w /app node:20-alpine npm audit
 - [ ] `morgan combined` logs flowing to a log aggregator
 - [ ] `/health` and `/ready` probes verified in cluster
 - [ ] Pod restart alerts configured
+- [ ] Uptime Kuma monitors configured for frontend, backend `/ready`, and MinIO
